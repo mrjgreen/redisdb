@@ -8,9 +8,10 @@
 ### Redis Database
 ###
 [redis]
-  host = "localhost:6379,localhost:6380,localhost:6381"
+  #host = "localhost:6379,localhost:6380,localhost:6381"
+  host = "localhost:6379"
   sentinel = false
-  auth = "2aaiua43u2bfb2"
+  #auth = "2aaiua43u2bfb2"
   key-prefix = "reduxdb:"
 
 ###
@@ -38,12 +39,12 @@
 ###
 [http]
   enabled = false
-  bind-address = ":8086"
+  port = "8086"
   
 ###
 ### Controls how the TCP endpoints are configured.
 ###
 [tcp]
   enabled = true
-  bind-address = ":6086"
+  port = "6086"
 ~~~
