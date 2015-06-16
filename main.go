@@ -16,6 +16,7 @@ func main() {
 	}
 }
 
+
 // Run determines and runs the command specified by the CLI args.
 func start(args ...string) error {
 
@@ -28,7 +29,7 @@ func start(args ...string) error {
 	cmd := NewRunCommand()
 
 	if err := cmd.Run(config_path); err != nil {
-		return fmt.Errorf("%s", err)
+		return err
 	}
 
 	// Wait indefinitely.

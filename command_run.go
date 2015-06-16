@@ -2,28 +2,17 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"runtime"
 	"github.com/BurntSushi/toml"
 )
 
 type Command struct {
-	closing chan struct{}
 
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-
-	Server *Server
 }
 
 func NewRunCommand() *Command {
 	return &Command{
-		closing: make(chan struct{}),
-		Stdin:   os.Stdin,
-		Stdout:  os.Stdout,
-		Stderr:  os.Stderr,
+		//closing: make(chan struct{})
 	}
 }
 
@@ -32,7 +21,7 @@ func (cmd *Command) Run(config_path string) error {
 
 	// Set parallelism.
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	fmt.Fprintf(cmd.Stderr, "GOMAXPROCS set to %d\n", runtime.GOMAXPROCS(0))
+	fmt.Printf("GOMAXPROCS set to %d\n", runtime.GOMAXPROCS(0))
 
 	// Parse config
 	config, err := cmd.ParseConfig(config_path)
@@ -46,10 +35,9 @@ func (cmd *Command) Run(config_path string) error {
 		return fmt.Errorf("create server: %s", err)
 	}
 
-	if err := s.Open(); err != nil {
+	if err := s.Start(); err != nil {
 		return fmt.Errorf("open server: %s", err)
 	}
-	cmd.Server = s
 
 	return nil
 }
@@ -63,9 +51,9 @@ func (cmd *Command) ParseConfig(path string) (*Config, error) {
 
 	// Use demo configuration if no config path is specified.
 	if path == "" {
-		fmt.Fprintln(cmd.Stdout, "no configuration provided, using default settings")
+		fmt.Println("no configuration provided, using default settings")
 	}else{
-		fmt.Fprintf(cmd.Stdout, "using configuration at: %s\n", path)
+		fmt.Printf("using configuration at: %s\n", path)
 
 		if _, err := toml.DecodeFile(path, &config); err != nil {
 			return nil, err
