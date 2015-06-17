@@ -51,12 +51,24 @@ type SeriesSearch struct{
 type SeriesStore interface{
 	AddDataPoint(*DataPoint) error
 	DeleteSeries(string) error
+	Search(data SeriesSearch) *Results
+	Delete(data SeriesSearch)
 }
 
 type RedisSeriesStore struct{
 	Conn *redis.Client
 	Prefix string
 	Log log.Logger
+}
+
+type Results []*ResultPoint
+type ResultsMap map[string]*ResultPoint
+
+type ResultPoint struct{
+	Id string
+	Value DataValue
+	Tags DataTags
+	Time float64
 }
 
 func expandMapToArray(m map[string]string) []string{
@@ -119,6 +131,33 @@ func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 
 func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
 
+	items := self.listIDs(data)
+
+	if data.Group.Time != "" && data.Group.Values != nil {
+		return self.searchKeys(data, items)
+	}
+
+	return self.searchGroupedKeys(data, items)
+}
+
+func (self *RedisSeriesStore) Delete(data SeriesSearch){
+
+	items := self.listIDs(data)
+
+	for _, z := range *items{
+
+		self.Conn.Multi().Exec(func() error{
+
+			self.Conn.ZRem(self.Prefix + "data:" + data.Name, z.Member)
+			self.Conn.HDel(self.Prefix + "data:" + data.Name + ":hash", z.Member)
+
+			return nil
+		})
+	}
+}
+
+func (self *RedisSeriesStore) listIDs(data SeriesSearch) *[]redis.Z{
+
 	search_id := strconv.FormatUint(simpleflake.NewId().Id, 10)
 
 	// Get the start and end times for the search
@@ -166,22 +205,9 @@ func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
 		panic(err)
 	}
 
-	if data.Group.Time != "" && data.Group.Values != nil {
-		return self.searchKeys(data, &items)
-	}
-
-	return self.searchGroupedKeys(data, &items)
+	return &items
 }
 
-type Results []*ResultPoint
-type ResultsMap map[string]*ResultPoint
-
-type ResultPoint struct{
-	Id string
-	Value DataValue
-	Tags DataTags
-	Time float64
-}
 
 func resultMapToResultArray(m *ResultsMap) *Results{
 	vals := make(Results, len(*m))

@@ -13,7 +13,7 @@ To create a continuous queries send a standard read command "<query>"
 ~~~JSON
 {
     "query" : "events_10min_211_c55", // The result will be stored here
-    "name" : "events",
+    "name" : "events*", // Wildcard support
     "values" : {
         "sumvalue" : "SUM(value)"
         "distinct_values" : "COUNT(value)"
