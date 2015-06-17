@@ -9,6 +9,7 @@ import (
 type ContinuousQueryManager struct{
 	Conn *redis.Client
 	Prefix string
+	Store SeriesStore
 	Log log.Logger
 	ComputeInterval string
 }

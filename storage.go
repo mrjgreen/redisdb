@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
+	"github.com/ryanuber/go-glob"
 	"./simpleflake"
 )
 
@@ -48,11 +49,21 @@ type SeriesSearch struct{
 	Group SearchGroupBy
 }
 
+func NewSearchOlderThan(name string, age_seconds uint64) SeriesSearch{
+	return SeriesSearch{
+		Name : name,
+		Between : SearchTimeRange{
+			End : float64(uint64(time.Now().Unix()) - age_seconds),
+		},
+	}
+}
+
 type SeriesStore interface{
 	AddDataPoint(*DataPoint) error
 	DeleteSeries(string) error
 	Search(data SeriesSearch) *Results
 	Delete(data SeriesSearch)
+	ListSeries(filter string) []Series
 }
 
 type RedisSeriesStore struct{
@@ -69,6 +80,11 @@ type ResultPoint struct{
 	Value DataValue
 	Tags DataTags
 	Time float64
+}
+
+type Series struct {
+	Name string
+	Created float64
 }
 
 func expandMapToArray(m map[string]string) []string{
@@ -146,13 +162,7 @@ func (self *RedisSeriesStore) Delete(data SeriesSearch){
 
 	for _, z := range *items{
 
-		self.Conn.Multi().Exec(func() error{
-
-			self.Conn.ZRem(self.Prefix + "data:" + data.Name, z.Member)
-			self.Conn.HDel(self.Prefix + "data:" + data.Name + ":hash", z.Member)
-
-			return nil
-		})
+		self.Conn.ZRem(self.Prefix + "data:" + data.Name, z.Member)
 	}
 }
 
@@ -227,16 +237,14 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 
 	for _, z := range *ids{
 
-		recordRes, _ := self.Conn.HGet(self.Prefix + "data:" + data.Name + ":hash", z.Member).Result()
-
-		var record map[string]string
-
 		var group = make([]string, 0)
 
-		json.Unmarshal([]byte(recordRes), &record)
+		var record StorageDataPacket
+
+		json.Unmarshal([]byte(z.Member), &record)
 
 		for _, col := range data.Group.Values {
-			group = append(group, col, record[col])
+			group = append(group, col, record.Value[col].(string))
 		}
 
 		groupbyte, _ := json.Marshal(group)
@@ -268,11 +276,11 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 					results[groupstr].Value[target] = 0.0
 				}
 
-				flt, _ := strconv.ParseFloat(record[source.Column], 64)
+				flt, _ := strconv.ParseFloat(record.Value[source.Column].(string), 64)
 
 				results[groupstr].Value[target] = results[groupstr].Value[target].(float64) + flt
 			}else {
-				results[groupstr].Value[target] = record[source.Column]
+				results[groupstr].Value[target] = record.Value[source.Column].(string)
 			}
 		}
 	}
@@ -286,28 +294,31 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 
 	for _, z := range *ids{
 
-		recordRes, _ := self.Conn.HGet(self.Prefix + "data:" + data.Name + ":hash", z.Member).Result()
+		var record StorageDataPacket
 
-		var record map[string]string
+		json.Unmarshal([]byte(z.Member), &record)
 
-		json.Unmarshal([]byte(recordRes), &record)
-
-		values := DataValue{}
-
-		for target, source := range data.Values{
-			values[target] = record[source.Column]
-		}
+//		values := DataValue{}
+//
+//		for target, source := range data.Values{
+//			values[target] = record.Value[source.Column]
+//		}
 
 		point := &ResultPoint{
-			Value : values,
+			Value : record.Value,
 			Time : z.Score,
-			Id : z.Member,
+			Id : record.Id,
 		}
 
 		results = append(results, point)
 	}
 
 	return &results
+}
+
+type StorageDataPacket struct {
+	Id string
+	Value DataValue
 }
 
 func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
@@ -318,15 +329,15 @@ func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
 
 	//log.Debug("Inserting data point into series: " + data.Name)
 
-	val_str, _ := json.Marshal(data.Value)
+	val_str, _ := json.Marshal(StorageDataPacket{Id : data.Id, Value : data.Value})
 
-	z_val := redis.Z{data.Time, data.Id}
+	z_val := redis.Z{Score: data.Time, Member: string(val_str)}
 
 	self.Conn.Multi().Exec(func() error{
 
-		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, z_val)
+		self.Conn.ZAdd(self.Prefix + "meta:events", redis.Z{Score: data.Time, Member: data.Name})
 
-		self.Conn.HSet(self.Prefix + "data:" + data.Name + ":hash", data.Id, string(val_str))
+		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, z_val)
 
 		for k,v := range data.Tags {
 			self.Conn.ZAdd(self.Prefix + "data:" + data.Name + ":tags:" + k + ":" + v, z_val)
@@ -336,6 +347,27 @@ func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
 	})
 
 	return nil
+}
+
+func (self *RedisSeriesStore) ListSeries(filter string) []Series{
+
+	val, _ := self.Conn.ZRangeWithScores(self.Prefix + "meta:events", 0, -1).Result()
+
+	var results = make([]Series, 0)
+
+	for _, z := range val{
+
+		if(filter != "" && glob.Glob(filter, z.Member)){
+			point := Series{
+				Name: z.Member,
+				Created: z.Score,
+			}
+
+			results = append(results, point)
+		}
+	}
+
+	return results
 }
 
 func (self *RedisSeriesStore) DeleteSeries(series string) error{
@@ -355,7 +387,6 @@ func (self *RedisSeriesStore) DeleteSeries(series string) error{
 		self.Conn.Multi().Exec(func() error{
 
 			self.Conn.Del(self.Prefix + "data:" + series)
-			self.Conn.Del(self.Prefix + "data:" + series + ":hash")
 
 			for _, key := range items {
 

@@ -53,7 +53,7 @@ func NewConfig() *Config {
 			Level : "info",
 		},
 		Retention : &RetentionConfig{
-			CheckInterval :	"2m",
+			CheckInterval :	"10s",
 		},
 		ContinuousQuery : &ContinuousQueryConfig{
 			ComputeInterval : "10s",

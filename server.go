@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	//"time"
+	"strconv"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 )
@@ -54,19 +56,22 @@ func NewServer(c *Config) (*Server, error) {
 		Prefix : c.Redis.KeyPrefix,
 		Log: log,
 	}
+
 	retention := &RetentionPolicyManager{
 		Conn : client,
+		Store : store,
 		Prefix : c.Redis.KeyPrefix,
 		CheckInterval : c.Retention.CheckInterval,
 		Log: log,
 	}
+
 	cq := &ContinuousQueryManager{
 		Conn : client,
+		Store : store,
 		Prefix : c.Redis.KeyPrefix,
 		ComputeInterval : c.ContinuousQuery.ComputeInterval,
 		Log: log,
 	}
-
 
 	s := &Server{
 		Store : store,
@@ -78,13 +83,50 @@ func NewServer(c *Config) (*Server, error) {
 	return s, nil
 }
 
+func (s *Server) runTestInserts() error {
+
+	s.Log.Info("Running test inserts")
+
+	s.RetentionPolicyManager.AddRetentionPolicy(RetentionPolicy{"events", uint64(30)})
+
+	var i = 0
+
+	for {
+
+		var campaignTag string
+
+		if i % 4 == 0 {
+			campaignTag = "123"
+		}else if i % 7 == 0 {
+			campaignTag = "456"
+		}else {
+			campaignTag = "789"
+		}
+
+		point := NewDataPoint("events", DataValue{
+			"value" : strconv.Itoa(i),
+			"event" : strconv.Itoa(i % 5),
+			"campaign" : campaignTag,
+		})
+
+		point.Tags = DataTags{"campaign" : campaignTag}
+
+		s.Store.AddDataPoint(point)
+
+		//time.Sleep(10 * time.Millisecond)
+	}
+
+	return  nil
+}
 
 func (s *Server) Start() error {
 
-	s.Log.Info("Started server")
-
 	s.RetentionPolicyManager.Start()
 	s.ContinuousQueryManager.Start()
+
+	s.Log.Info("Started server")
+
+	go s.runTestInserts()
 
 	return  nil
 }

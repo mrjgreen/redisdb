@@ -10,6 +10,7 @@ import (
 
 type RetentionPolicyManager struct{
 	Conn *redis.Client
+	Store SeriesStore
 	Prefix string
 	Log log.Logger
 	CheckInterval string
@@ -29,7 +30,17 @@ func (self *RetentionPolicyManager) AddRetentionPolicy(policy RetentionPolicy){
 
 func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
-	self.Log.Info(fmt.Sprintf("Applying retention policy to '%s'. Removing records older than %d seconds", policy.Name, policy.TimeSeconds))
+	items := self.Store.ListSeries(policy.Name)
+
+	for _, series := range items {
+
+		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %d seconds", policy.Name, series.Name, policy.TimeSeconds))
+
+		search := NewSearchOlderThan(series.Name, policy.TimeSeconds)
+
+		self.Store.Delete(search)
+	}
+
 }
 
 func (self *RetentionPolicyManager) GetRetentionPolicies() []RetentionPolicy {
@@ -56,8 +67,6 @@ func (self *RetentionPolicyManager) GetRetentionPolicies() []RetentionPolicy {
 func (self *RetentionPolicyManager) Start(){
 
 	var duration,_ = time.ParseDuration(self.CheckInterval);
-
-	self.AddRetentionPolicy(RetentionPolicy{"events:*", uint64(120)})
 
 	go func(){
 		for {
