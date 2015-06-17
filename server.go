@@ -1,10 +1,8 @@
 package main
 
 import (
-	//"fmt"
 	"os"
 	log "gopkg.in/inconshreveable/log15.v2"
-	//"time"
 	redis "gopkg.in/redis.v3"
 )
 
@@ -63,12 +61,29 @@ func NewServer(c *Config) (*Server, error) {
 		Log : newLogger(c.Log),
 	}
 
+	store.Log = s.Log
+
 	point := NewDataPoint("test", DataValue{"something" : "1", "else" : "2"})
 	point.Tags = DataTags{"campaign" : "1234"}
 
 	s.Store.AddDataPoint(point)
 
-	s.Store.DeleteSeries("test")
+	search := SeriesSearch{
+		Name: "test",
+		//Values: SearchValues{},
+		Tags: SearchTags{
+			"campaign" : []string{"1234"},
+		},
+		Between: SearchTimeRange{
+			Start : point.Time - 10.0,
+			End : point.Time + 10.0,
+		},
+		//Group: SearchGroupBy{},
+	}
+
+	store.Search(search)
+
+	//s.Store.DeleteSeries("test")
 
 	return s, nil
 }
