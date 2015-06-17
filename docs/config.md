@@ -26,13 +26,13 @@
 ### Controls the enforcement of retention policies for evicting data.
 ###
 [retention]
-  check-interval = "10m"
+  check-interval = "5s"
 
 ###
 ### Controls the continuous query manager.
 ###
 [continuous_queries]
-  compute-interval = "10s"
+  compute-interval = "5s"
 
 ###
 ### Controls how the HTTP endpoints are configured.

@@ -86,7 +86,7 @@ func NewDataPoint(name string, values DataValue) *DataPoint{
 	return &DataPoint{
 		Name : name,
 		Value : values,
-		Id : strconv.FormatUint(simpleflake.NewId().Id, 10),
+		Id : simpleflake.NewId().String(),
 		Time : float64(time.Now().Unix()),
 	}
 }
@@ -158,7 +158,7 @@ func (self *RedisSeriesStore) Delete(data SeriesSearch){
 
 func (self *RedisSeriesStore) listIDs(data SeriesSearch) *[]redis.Z{
 
-	search_id := strconv.FormatUint(simpleflake.NewId().Id, 10)
+	search_id := simpleflake.NewId().String()
 
 	// Get the start and end times for the search
 	score := getDataBetweenScore(data)
@@ -248,7 +248,7 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 			results[groupstr] = &ResultPoint{
 				Value : DataValue{},
 				Time : z.Score,
-				Id : z.Member,
+				Id : simpleflake.NewId().String(),
 			}
 		}
 

@@ -2,8 +2,6 @@ package main
 
 import (
 	"os"
-	"fmt"
-	"encoding/json"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 )
@@ -14,17 +12,8 @@ import (
 type Server struct {
 	Log log.Logger
 	Store SeriesStore
-}
-
-func newRedisStore(c *RedisConfig) (*RedisSeriesStore, error){
-
-	client := redis.NewClient(&redis.Options{
-		Addr:     c.Host,
-		Password: c.Auth,
-		DB:       0,
-	})
-
-	return &RedisSeriesStore{Conn : client, Prefix : c.KeyPrefix}, nil
+	RetentionPolicyManager *RetentionPolicyManager
+	ContinuousQueryManager *ContinuousQueryManager
 }
 
 func newLogger(c *LogConfig) log.Logger{
@@ -52,46 +41,39 @@ func newLogger(c *LogConfig) log.Logger{
 // NewServer returns a new instance of Server built from a config.
 func NewServer(c *Config) (*Server, error) {
 
-	store, err := newRedisStore(c.Redis)
+	client := redis.NewClient(&redis.Options{
+		Addr:     c.Redis.Host,
+		Password: c.Redis.Auth,
+		DB:       0,
+	})
 
-	if err != nil{
-		return nil, err
+	log := newLogger(c.Log)
+
+	store := &RedisSeriesStore{
+		Conn : client,
+		Prefix : c.Redis.KeyPrefix,
+		Log: log,
 	}
+	retention := &RetentionPolicyManager{
+		Conn : client,
+		Prefix : c.Redis.KeyPrefix,
+		CheckInterval : c.Retention.CheckInterval,
+		Log: log,
+	}
+	cq := &ContinuousQueryManager{
+		Conn : client,
+		Prefix : c.Redis.KeyPrefix,
+		ComputeInterval : c.ContinuousQuery.ComputeInterval,
+		Log: log,
+	}
+
 
 	s := &Server{
 		Store : store,
-		Log : newLogger(c.Log),
+		Log : log,
+		RetentionPolicyManager : retention,
+		ContinuousQueryManager : cq,
 	}
-
-	store.Log = s.Log
-
-	point := NewDataPoint("test", DataValue{"something" : "1", "else" : "2"})
-	point.Tags = DataTags{"campaign" : "1234"}
-
-	s.Store.AddDataPoint(point)
-
-	search := SeriesSearch{
-		Name: "test",
-		Tags: SearchTags{
-			"campaign" : []string{"1234"},
-		},
-		Between: SearchTimeRange{
-			Start : point.Time - 10.0,
-			End : point.Time + 10.0,
-		},
-		Values: SearchValues{"campaign" : SearchValue{
-			Column : "campaign",
-		}},
-		//Group: SearchGroupBy{},
-	}
-
-	results := store.Search(search)
-
-	res, _ := json.Marshal(results)
-
-	fmt.Printf("%s", res)
-
-	//s.Store.DeleteSeries("test")
 
 	return s, nil
 }
@@ -100,6 +82,9 @@ func NewServer(c *Config) (*Server, error) {
 func (s *Server) Start() error {
 
 	s.Log.Info("Started server")
+
+	s.RetentionPolicyManager.Start()
+	s.ContinuousQueryManager.Start()
 
 	return  nil
 }

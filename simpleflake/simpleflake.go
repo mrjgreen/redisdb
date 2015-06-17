@@ -2,12 +2,17 @@ package simpleflake
 
 import (
 	"time"
+	"strconv"
 	"math/rand"
 )
 
 type SimpleFlakeResponse struct {
 	Time time.Time
 	Id uint64
+}
+
+func (self SimpleFlakeResponse) String() string{
+	return strconv.FormatUint(self.Id, 16)
 }
 
 func NewId() *SimpleFlakeResponse{

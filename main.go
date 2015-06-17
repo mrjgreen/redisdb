@@ -33,7 +33,7 @@ func start(args ...string) error {
 	}
 
 	// Wait indefinitely.
-	//<-(chan struct{})(nil)
+	<-(chan struct{})(nil)
 
 	return nil
 }
