@@ -4,12 +4,13 @@ import (
 	"time"
 	"fmt"
 	"strconv"
+	"encoding/json"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 	"./simpleflake"
 )
 
-type DataValue map[string]string
+type DataValue map[string]interface{}
 
 type DataTags map[string]string
 
@@ -165,10 +166,15 @@ func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
 		panic(err)
 	}
 
-	return self.searchKeys(data, &items)
+	if data.Group.Time != "" && data.Group.Values != nil {
+		return self.searchKeys(data, &items)
+	}
+
+	return self.searchGroupedKeys(data, &items)
 }
 
 type Results []*ResultPoint
+type ResultsMap map[string]*ResultPoint
 
 type ResultPoint struct{
 	Id string
@@ -177,6 +183,76 @@ type ResultPoint struct{
 	Time float64
 }
 
+func resultMapToResultArray(m *ResultsMap) *Results{
+	vals := make(Results, len(*m))
+
+	i := 0
+	for _,v := range *m {
+		vals[i] = v
+		i += 1
+	}
+
+	return &vals
+}
+
+func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.Z) *Results{
+
+	var results = make(ResultsMap,0)
+
+	for _, z := range *ids{
+
+		recordRes, _ := self.Conn.HGet(self.Prefix + "data:" + data.Name + ":hash", z.Member).Result()
+
+		var record map[string]string
+
+		var group = make([]string, 0)
+
+		json.Unmarshal([]byte(recordRes), &record)
+
+		for _, col := range data.Group.Values {
+			group = append(group, col, record[col])
+		}
+
+		groupbyte, _ := json.Marshal(group)
+
+		groupstr := string(groupbyte)
+
+		if results[groupstr] == nil {
+
+			results[groupstr] = &ResultPoint{
+				Value : DataValue{},
+				Time : z.Score,
+				Id : z.Member,
+			}
+		}
+
+		for target, source := range data.Values{
+
+			if source.Type == "COUNT" {
+
+				if results[groupstr].Value[target] == nil {
+					results[groupstr].Value[target] = 0
+				}
+
+				results[groupstr].Value[target] = results[groupstr].Value[target].(int) + 1
+
+			}else if source.Type == "SUM" {
+
+				if results[groupstr].Value[target] == nil {
+					results[groupstr].Value[target] = 0.0
+				}
+
+				flt, _ := strconv.ParseFloat(record[source.Column], 64)
+
+				results[groupstr].Value[target] = results[groupstr].Value[target].(float64) + flt
+			}else {
+				results[groupstr].Value[target] = record[source.Column]
+			}
+		}
+	}
+
+	return resultMapToResultArray(&results)
+}
 
 func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Results{
 
@@ -184,7 +260,11 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 
 	for _, z := range *ids{
 
-		record, _ := self.Conn.HGetAllMap(self.Prefix + "data:" + data.Name + ":id:" + z.Member).Result()
+		recordRes, _ := self.Conn.HGet(self.Prefix + "data:" + data.Name + ":hash", z.Member).Result()
+
+		var record map[string]string
+
+		json.Unmarshal([]byte(recordRes), &record)
 
 		values := DataValue{}
 
@@ -206,25 +286,26 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 
 func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
 
-	dataValues := expandMapToArray(data.Value);
-
-	if len(dataValues) < 2{
+	if data.Value == nil{
 		return fmt.Errorf("Attempted to insert empty value set into series: " + data.Name)
 	}
 
 	//log.Debug("Inserting data point into series: " + data.Name)
 
+	val_str, _ := json.Marshal(data.Value)
+
+	z_val := redis.Z{data.Time, data.Id}
+
 	self.Conn.Multi().Exec(func() error{
 
-		zVals := redis.Z{data.Time, data.Id}
+		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, z_val)
 
-		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, zVals)
-		self.Conn.HDel(self.Prefix + "data:" + data.Name + ":id:" + data.Id)
-		self.Conn.HMSet(self.Prefix + "data:" + data.Name + ":id:" + data.Id, dataValues[0], dataValues[1], dataValues[2:]...)
+		self.Conn.HSet(self.Prefix + "data:" + data.Name + ":hash", data.Id, string(val_str))
 
 		for k,v := range data.Tags {
-			self.Conn.ZAdd(self.Prefix + "data:" + data.Name + ":tags:" + k + ":" + v, zVals)
+			self.Conn.ZAdd(self.Prefix + "data:" + data.Name + ":tags:" + k + ":" + v, z_val)
 		}
+
 		return nil
 	})
 
@@ -239,13 +320,17 @@ func (self *RedisSeriesStore) DeleteSeries(series string) error{
 	log.Info("Deleting series: " + series)
 
 	for {
-		cursor, items, _ = self.Conn.Scan(cursor, self.Prefix + "data:" + series + "*", 100).Result()
+		cursor, items, _ = self.Conn.Scan(cursor, self.Prefix + "data:" + series + ":tags:*", 1000).Result()
 
-		if len(items) == 0{
+		if len(items) == 0 {
 			return nil
 		}
 
 		self.Conn.Multi().Exec(func() error{
+
+			self.Conn.Del(self.Prefix + "data:" + series)
+			self.Conn.Del(self.Prefix + "data:" + series + ":hash")
+
 			for _, key := range items {
 
 				self.Conn.Del(key)

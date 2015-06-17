@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 	"strconv"
-	//"time"
+	"time"
 	//"encoding/json"
 	//"fmt"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +24,7 @@ func TestRedis(t *testing.T)  {
 
 	stream := "test"
 
-	//startTime := float64(time.Now().Unix() - 1)
+	startTime := float64(time.Now().Unix() - 1)
 
 	for i := 0; i < 100000; i++{
 
@@ -49,31 +49,36 @@ func TestRedis(t *testing.T)  {
 		store.AddDataPoint(point)
 	}
 
-	//endTime := float64(time.Now().Unix() + 1)
+	endTime := float64(time.Now().Unix() + 1)
 
-//	search := SeriesSearch{
-//		Name: stream,
-//		Tags: SearchTags{
-//			"campaign" : []string{"123"},
-//		},
-//		Between: SearchTimeRange{
-//			Start : startTime,
-//			End : endTime,
-//		},
-//		Values: SearchValues{
-//			"campaign" : SearchValue{Column:"campaign"},
-//			"event" : SearchValue{Column:"event"},
-//			//"count" : SearchValue{Type:"campaign"},
-//		},
-////		Group: SearchGroupBy{
-////			Values: []string{"campaign", "event"},
-////		},
-//	}
+	search := SeriesSearch{
+		Name: stream,
+		Tags: SearchTags{
+			"campaign" : []string{"123"},
+		},
+		Between: SearchTimeRange{
+			Start : startTime,
+			End : endTime,
+		},
+		Values: SearchValues{
+			"campaign" : SearchValue{Column:"campaign"},
+			"event" : SearchValue{Column:"event"},
+			"count" : SearchValue{Type:"COUNT"},
+			"value" : SearchValue{Type:"SUM", Column:"value"},
+		},
+		Group: SearchGroupBy{
+			Values: []string{"campaign", "event"},
+		},
+	}
 
-	//results := store.Search(search)
+	results := store.Search(search)
 
-	//assert.Equal(t, 25000, len(*results), "Campaign 123 result count")
-	assert.Equal(t, 1, 1, "Campaign 123 result count")
+	//res, _ := json.Marshal(results)
+
+	//fmt.Printf("%s", res)
+
+	assert.Equal(t, 5, len(*results), "Campaign 123 result count")
+	//assert.Equal(t, 1, 1, "Campaign 123 result count")
 
 	//store.DeleteSeries(stream)
 }
