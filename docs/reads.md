@@ -12,6 +12,7 @@ Query:
         "sumvalue" : "SUM(value)"
         "distinct_values" : "COUNT(value)"
         "count" : "COUNT()" // No count field required to get a full count of all rows
+        "campaign" : "campaign"
     },
     "tags" : {
         "campaign" : [55]
@@ -24,7 +25,7 @@ Query:
     },
     "group" : {
         "time" : "10m", // E.g 30s 15m 6h 30d 12w
-        "tags" : ["campaign"]
+        "values" : ["campaign"]
     }
 }
 ~~~

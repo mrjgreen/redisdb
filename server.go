@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"fmt"
+	"encoding/json"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 )
@@ -70,7 +72,6 @@ func NewServer(c *Config) (*Server, error) {
 
 	search := SeriesSearch{
 		Name: "test",
-		//Values: SearchValues{},
 		Tags: SearchTags{
 			"campaign" : []string{"1234"},
 		},
@@ -78,10 +79,17 @@ func NewServer(c *Config) (*Server, error) {
 			Start : point.Time - 10.0,
 			End : point.Time + 10.0,
 		},
+		Values: SearchValues{"campaign" : SearchValue{
+			Column : "campaign",
+		}},
 		//Group: SearchGroupBy{},
 	}
 
-	store.Search(search)
+	results := store.Search(search)
+
+	res, _ := json.Marshal(results)
+
+	fmt.Printf("%s", res)
 
 	//s.Store.DeleteSeries("test")
 

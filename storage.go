@@ -30,7 +30,7 @@ type SearchTags map[string][]string
 
 type SearchGroupBy struct {
 	Time string
-	Tags []string
+	Values []string
 }
 
 type SearchValue struct {
@@ -116,7 +116,7 @@ func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 
 }
 
-func (self *RedisSeriesStore) Search(data SeriesSearch) error{
+func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
 
 	search_id := strconv.FormatUint(simpleflake.NewId().Id, 10)
 
@@ -128,9 +128,7 @@ func (self *RedisSeriesStore) Search(data SeriesSearch) error{
 	// Store all applicable zval index keys in a slice
 	zvalkeys := getZvalKeysForSearch(data, self.Prefix)
 
-	var (
-		result *redis.ZSliceCmd
-	)
+	var result *redis.ZSliceCmd
 
 	// If more than one zval do a zinterstore between ranges
 	if len(zvalkeys) > 1 {
@@ -161,14 +159,50 @@ func (self *RedisSeriesStore) Search(data SeriesSearch) error{
 		result = self.Conn.ZRangeByScoreWithScores(zvalkeys[0], score)
 	}
 
-	items, _ := result.Result()
+	items, err := result.Result()
 
-	fmt.Printf("%v", items)
+	if err != nil {
+		panic(err)
+	}
 
-	return nil
+	return self.searchKeys(data, &items)
 }
 
-func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
+type Results []*ResultPoint
+
+type ResultPoint struct{
+	Id string
+	Value DataValue
+	Tags DataTags
+	Time float64
+}
+
+
+func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Results{
+
+	var results = Results{}
+
+	for _, z := range *ids{
+
+		record, _ := self.Conn.HGetAllMap(self.Prefix + "data:" + data.Name + ":id:" + z.Member).Result()
+
+		values := DataValue{}
+
+		for target, source := range data.Values{
+			values[target] = record[source.Column]
+		}
+
+		point := &ResultPoint{
+			Value : values,
+			Time : z.Score,
+			Id : z.Member,
+		}
+
+		results = append(results, point)
+	}
+
+	return &results
+}
 
 func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
 
@@ -178,15 +212,18 @@ func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
 		return fmt.Errorf("Attempted to insert empty value set into series: " + data.Name)
 	}
 
-	log.Debug("Inserting data point into series: " + data.Name)
+	//log.Debug("Inserting data point into series: " + data.Name)
 
 	self.Conn.Multi().Exec(func() error{
-		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, redis.Z{data.Time, data.Id})
+
+		zVals := redis.Z{data.Time, data.Id}
+
+		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, zVals)
 		self.Conn.HDel(self.Prefix + "data:" + data.Name + ":id:" + data.Id)
 		self.Conn.HMSet(self.Prefix + "data:" + data.Name + ":id:" + data.Id, dataValues[0], dataValues[1], dataValues[2:]...)
 
 		for k,v := range data.Tags {
-			self.Conn.ZAdd(self.Prefix + "data:" + data.Name + ":tags:" + k + ":" + v, redis.Z{data.Time, data.Id})
+			self.Conn.ZAdd(self.Prefix + "data:" + data.Name + ":tags:" + k + ":" + v, zVals)
 		}
 		return nil
 	})
