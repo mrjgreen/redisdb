@@ -16,6 +16,7 @@ type ContinuousQueryManager struct{
 }
 
 type ContinuousQuery struct{
+	Series string
 	TargetSeries string
 	Granularity string
 	Query SeriesSearch
@@ -50,10 +51,9 @@ func (self *ContinuousQueryManager) Apply(query ContinuousQuery){
 	query.Query.Between.Start = float64(startTime.UnixNano()) / 1e9
 
 	// Perform search and group by
-	results := self.Store.Search(query.Query)
+	results := self.Store.Search(query.Series, query.Query)
 
-	self.Store.Delete(SeriesSearch{
-		Name : query.TargetSeries,
+	self.Store.Delete(query.TargetSeries, SeriesSearch{
 		Between : SearchTimeRange{
 			Start : query.Query.Between.Start,
 			End : query.Query.Between.Start,
@@ -97,10 +97,10 @@ func (self *ContinuousQueryManager) Start(){
 			self.Log.Info("Checking continuous queries after " + self.ComputeInterval)
 
 			self.Apply(ContinuousQuery{
+				Series : "events",
 				Granularity : "1m",
 				TargetSeries : "events_10m",
 				Query : SeriesSearch{
-					Name: "events",
 					Values: SearchValues{
 						"campaign" : SearchValue{Column:"campaign"},
 						"event" : SearchValue{Column:"event"},

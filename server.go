@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	//"time"
+	"time"
 	"strconv"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
@@ -121,7 +121,7 @@ func (s *Server) runTestInserts() error {
 
 		s.Store.AddDataPoint("events", point)
 
-		//time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	return  nil
@@ -135,7 +135,7 @@ func (s *Server) Start() error {
 
 	s.Log.Info("Started server")
 
-	go s.runTestInserts()
+	//go s.runTestInserts()
 
 	return  nil
 }

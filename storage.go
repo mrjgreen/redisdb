@@ -37,7 +37,6 @@ type SearchValue struct {
 type SearchValues map[string]SearchValue
 
 type SeriesSearch struct{
-	Name string
 	Values SearchValues
 	Between SearchTimeRange
 	Group SearchGroupBy
@@ -45,10 +44,10 @@ type SeriesSearch struct{
 
 type SeriesStore interface{
 	AddDataPoint(series string, data *DataPoint) error
-	DeleteSeries(series string) error
-	Search(data SeriesSearch) *Results
-	Delete(data SeriesSearch)
+	Delete(series string, data SeriesSearch)
+	Search(series string, data SeriesSearch) *Results
 	ListSeries(filter string) []Series
+	DeleteSeries(series string) error
 }
 
 type RedisSeriesStore struct{
@@ -71,9 +70,8 @@ type storagePacket struct {
 	Value DataValue
 }
 
-func NewSearchOlderThan(name string, age_seconds uint64) SeriesSearch{
+func NewSearchOlderThan(age_seconds uint64) SeriesSearch{
 	return SeriesSearch{
-		Name : name,
 		Between : SearchTimeRange{
 			End : float64(uint64(time.Now().Unix()) - age_seconds),
 		},
@@ -122,14 +120,14 @@ func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 	return score
 }
 
-func (self *RedisSeriesStore) getRawResults(data SeriesSearch) *[]redis.Z{
+func (self *RedisSeriesStore) getRawResults(series string, data SeriesSearch) *[]redis.Z{
 
 	// Get the start and end times for the search
 	score := getDataBetweenScore(data)
 
-	zvalkey := self.Prefix + "data:" + data.Name
+	zvalkey := self.Prefix + "data:" + series
 
-	message := fmt.Sprintf("Searching series: %s between range %s and %s on key %s", data.Name, score.Min, score.Max, zvalkey)
+	message := fmt.Sprintf("Searching series: %s between range %s and %s on key %s", series, score.Min, score.Max, zvalkey)
 
 	log.Debug(message)
 
@@ -144,9 +142,9 @@ func (self *RedisSeriesStore) getRawResults(data SeriesSearch) *[]redis.Z{
 	return &items
 }
 
-func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
+func (self *RedisSeriesStore) Search(series string, data SeriesSearch) *Results{
 
-	items := self.getRawResults(data)
+	items := self.getRawResults(series, data)
 
 	if !data.Group.Enabled {
 		return self.searchKeys(data, items)
@@ -155,14 +153,14 @@ func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
 	return self.searchGroupedKeys(data, items)
 }
 
-func (self *RedisSeriesStore) Delete(data SeriesSearch){
+func (self *RedisSeriesStore) Delete(series string, data SeriesSearch){
 
 	// Get the start and end times for the search
 	score := getDataBetweenScore(data)
 
-	zvalkey := self.Prefix + "data:" + data.Name
+	zvalkey := self.Prefix + "data:" + series
 
-	message := fmt.Sprintf("Deleting from series: %s between range %s and %s on key %s", data.Name, score.Min, score.Max, zvalkey)
+	message := fmt.Sprintf("Deleting from series: %s between range %s and %s on key %s", series, score.Min, score.Max, zvalkey)
 
 	log.Debug(message)
 
@@ -174,11 +172,11 @@ func (self *RedisSeriesStore) Delete(data SeriesSearch){
 		panic(err)
 	}
 
-	message = fmt.Sprintf("Deleted %d items from series: %s between range %s and %s on key %s", items, data.Name, score.Min, score.Max, zvalkey)
+	message = fmt.Sprintf("Deleted %d items from series: %s between range %s and %s on key %s", items, series, score.Min, score.Max, zvalkey)
 
 	log.Debug(message)
 
-	self.DeleteSeriesIfEmpty(data.Name)
+	self.DeleteSeriesIfEmpty(series)
 }
 
 func resultMapToResultArray(m *ResultsMap) *Results{
@@ -281,6 +279,12 @@ func (self *RedisSeriesStore) AddDataPoint(series string, data *DataPoint) error
 	if data.Value == nil{
 		return fmt.Errorf("Attempted to insert empty value set into series: " + series)
 	}
+
+	if data.Time == 0.0 {
+		data.Time = float64(time.Now().Unix())
+	}
+
+	log.Info("Adding data to series: " + series)
 
 	val_str, _ := json.Marshal(storagePacket{Id : simpleflake.NewId().String(), Value : data.Value})
 

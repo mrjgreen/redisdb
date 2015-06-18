@@ -45,9 +45,11 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
 		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %d seconds", policy.Name, series.Name, policy.TimeSeconds))
 
-		search := NewSearchOlderThan(series.Name, policy.TimeSeconds)
+		search := NewSearchOlderThan(policy.TimeSeconds)
 
-		self.Store.Delete(search)
+		self.Store.Delete(series.Name, search)
+
+		return
 	}
 }
 

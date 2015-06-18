@@ -21,8 +21,8 @@ There is a tcp api which is enabled by default.
 
 You can open a TCP socket to localhost:6578 and JSON send commands in the following format:
 
-  * write {"name" : "events", "values" : {...}, "time" : unixstamp.12112312}
-  * delete {"name" : "events", "tags" : {...}}
-  * read  {"name" : "events", "between" : {...}}
+  * write {"values" : {...}, "time" : unixstamp.12112312}
+  * delete {"tags" : {...}}
+  * read  {"between" : {...}}
   * stream {"drop" : ["events"]}
   * status

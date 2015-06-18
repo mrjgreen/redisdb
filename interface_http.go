@@ -13,12 +13,40 @@ type HttpInterface struct{
 	BindAddress string
 }
 
-func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, req *rest.Request){
+func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
 
+	series := r.PathParam("series")
+
+	data := &DataPoint{}
+
+	err := r.DecodeJsonPayload(data)
+
+	if err != nil {
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	self.Store.AddDataPoint(series, data)
+
+	w.WriteJson(data)
 }
 
-func (self *HttpInterface) ReadCommand(w rest.ResponseWriter, req *rest.Request){
+func (self *HttpInterface) ReadCommand(w rest.ResponseWriter, r *rest.Request){
 
+	series := r.PathParam("series")
+
+	search := SeriesSearch{}
+
+	err := r.DecodeJsonPayload(&search)
+
+	if err != nil {
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	results := self.Store.Search(series, search)
+
+	w.WriteJson(results)
 }
 
 // Open starts the service
@@ -29,8 +57,8 @@ func (self *HttpInterface) Start() error {
 	api.Use(rest.DefaultDevStack...)
 
 	router, _ := rest.MakeRouter(
-		rest.Post("/write", self.WriteCommand),
-		rest.Get("/read", self.ReadCommand),
+		rest.Post("/write/:series", self.WriteCommand),
+		rest.Get("/read/:series", self.ReadCommand),
 //		rest.Get("/status", self.StatusCommand),
 //		rest.Put("/admin", self.AdminCommand),
 	)
