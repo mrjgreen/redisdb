@@ -14,11 +14,23 @@ type ContinuousQueryManager struct{
 	ComputeInterval string
 }
 
-func (self *ContinuousQueryManager) AddContinuousQuery(){
+func (self *ContinuousQueryManager) Add(){
 
 }
 
-func (self *ContinuousQueryManager) RemoveContinuousQuery(){
+func (self *ContinuousQueryManager) Delete(){
+
+}
+
+func (self *ContinuousQueryManager) Apply(){
+
+	// Calculate last two time periods based on granularity
+
+	// Perform search and group by
+
+	// Using multi exec
+	// Delete from store where time between X AND X (same time stamp inclusive should only delete one range)
+	// Insert into new key
 
 }
 
