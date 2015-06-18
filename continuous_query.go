@@ -14,6 +14,10 @@ type ContinuousQueryManager struct{
 	ComputeInterval string
 }
 
+type ContinuousQuery struct{
+
+}
+
 func (self *ContinuousQueryManager) Add(){
 
 }
@@ -32,6 +36,27 @@ func (self *ContinuousQueryManager) Apply(){
 	// Delete from store where time between X AND X (same time stamp inclusive should only delete one range)
 	// Insert into new key
 
+}
+
+func (self *RetentionPolicyManager) List() []ContinuousQuery {
+
+	items := self.Conn.HGetAllMap(self.Prefix + "config:continuous_query")
+
+	var queries = make([]ContinuousQuery, 0)
+
+	for name, time := range items.Val(){
+
+		timeint,_ := strconv.ParseUint(time, 10, 64)
+
+		policy := RetentionPolicy{
+			Name : name,
+			TimeSeconds : timeint,
+		}
+
+		queries = append(queries, query)
+	}
+
+	return queries
 }
 
 func (self *ContinuousQueryManager) Start(){
