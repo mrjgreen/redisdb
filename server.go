@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	//"time"
+	"time"
 	"strconv"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
@@ -87,12 +87,14 @@ func (s *Server) runTestInserts() error {
 
 	s.Log.Info("Running test inserts")
 
-	s.RetentionPolicyManager.AddRetentionPolicy(RetentionPolicy{"events", uint64(30)})
+	s.RetentionPolicyManager.Delete("events*")
+	s.RetentionPolicyManager.Add(RetentionPolicy{"events*", uint64(30)})
 
 	var i = 0
 
 	for {
 
+		i++
 		var campaignTag string
 
 		if i % 4 == 0 {
@@ -109,11 +111,9 @@ func (s *Server) runTestInserts() error {
 			"campaign" : campaignTag,
 		})
 
-		point.Tags = DataTags{"campaign" : campaignTag}
-
 		s.Store.AddDataPoint(point)
 
-		//time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	return  nil

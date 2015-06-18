@@ -26,7 +26,7 @@ func TestRedis(t *testing.T)  {
 
 	startTime := float64(time.Now().Unix() - 1)
 
-	for i := 0; i < 1000; i++{
+	for i := 0; i < 100000; i++{
 
 		var campaignTag string
 
@@ -44,8 +44,6 @@ func TestRedis(t *testing.T)  {
 			"campaign" : campaignTag,
 		})
 
-		point.Tags = DataTags{"campaign" : campaignTag}
-
 		store.AddDataPoint(point)
 	}
 
@@ -53,9 +51,6 @@ func TestRedis(t *testing.T)  {
 
 	search := SeriesSearch{
 		Name: stream,
-		Tags: SearchTags{
-			"campaign" : []string{"123"},
-		},
 		Between: SearchTimeRange{
 			Start : startTime,
 			End : endTime,
@@ -67,6 +62,7 @@ func TestRedis(t *testing.T)  {
 			"value" : SearchValue{Type:"SUM", Column:"value"},
 		},
 		Group: SearchGroupBy{
+			Enabled : true,
 			Values: []string{"campaign", "event"},
 		},
 	}
@@ -74,7 +70,7 @@ func TestRedis(t *testing.T)  {
 	results := store.Search(search)
 
 
-	assert.Equal(t, 5, len(*results), "Campaign 123 result count")
+	assert.Equal(t, 15, len(*results), "Campaign 123 result count")
 
 	store.Delete(search)
 

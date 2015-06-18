@@ -21,11 +21,20 @@ type RetentionPolicy struct {
 	TimeSeconds uint64
 }
 
-func (self *RetentionPolicyManager) AddRetentionPolicy(policy RetentionPolicy){
+func (self *RetentionPolicyManager) Add(policy RetentionPolicy){
 
 	timestr := strconv.FormatUint(policy.TimeSeconds, 10)
 
+	self.Log.Info(fmt.Sprintf("Adding retention policy '%s' with retention %s seconds", policy.Name, timestr))
+
 	self.Conn.HSet(self.Prefix + "config:retention", policy.Name, timestr)
+}
+
+func (self *RetentionPolicyManager) Delete(name string){
+
+	self.Log.Info(fmt.Sprintf("Removing retention policy '%s'", name))
+
+	self.Conn.HDel(self.Prefix + "config:retention", name)
 }
 
 func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
@@ -43,7 +52,7 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
 }
 
-func (self *RetentionPolicyManager) GetRetentionPolicies() []RetentionPolicy {
+func (self *RetentionPolicyManager) List() []RetentionPolicy {
 
 	items := self.Conn.HGetAllMap(self.Prefix + "config:retention")
 
@@ -72,7 +81,7 @@ func (self *RetentionPolicyManager) Start(){
 		for {
 			self.Log.Info("Checking retention policies after " + self.CheckInterval)
 
-			policies := self.GetRetentionPolicies()
+			policies := self.List()
 
 			for _, policy := range policies{
 				self.ApplyPolicy(policy)

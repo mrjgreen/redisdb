@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
-	"github.com/ryanuber/go-glob"
 	"./simpleflake"
+	"github.com/ryanuber/go-glob"
 )
 
 type DataValue map[string]interface{}
@@ -19,7 +19,6 @@ type DataPoint struct{
 	Name string
 	Id string
 	Value DataValue
-	Tags DataTags
 	Time float64
 }
 
@@ -28,10 +27,8 @@ type SearchTimeRange struct {
 	End float64
 }
 
-type SearchTags map[string][]string
-
 type SearchGroupBy struct {
-	Time string
+	Enabled bool
 	Values []string
 }
 
@@ -44,7 +41,6 @@ type SearchValues map[string]SearchValue
 type SeriesSearch struct{
 	Name string
 	Values SearchValues
-	Tags SearchTags
 	Between SearchTimeRange
 	Group SearchGroupBy
 }
@@ -78,7 +74,6 @@ type ResultsMap map[string]*ResultPoint
 type ResultPoint struct{
 	Id string
 	Value DataValue
-	Tags DataTags
 	Time float64
 }
 
@@ -107,19 +102,6 @@ func NewDataPoint(name string, values DataValue) *DataPoint{
 	}
 }
 
-func getZvalKeysForSearch(data SeriesSearch, prefix string) []string{
-	// Store all applicable zval index keys in a slice
-	var zvalkeys = []string{prefix + "data:" + data.Name}
-
-	for k,vals := range data.Tags {
-		for _,v := range vals {
-			zvalkeys = append(zvalkeys, prefix + "data:" + data.Name + ":tags:" + k + ":" + v)
-		}
-	}
-
-	return zvalkeys
-}
-
 func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 
 	var end, start string
@@ -142,72 +124,20 @@ func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 	}
 
 	return score
-
 }
 
-func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
-
-	items := self.listIDs(data)
-
-	if data.Group.Time != "" && data.Group.Values != nil {
-		return self.searchKeys(data, items)
-	}
-
-	return self.searchGroupedKeys(data, items)
-}
-
-func (self *RedisSeriesStore) Delete(data SeriesSearch){
-
-	items := self.listIDs(data)
-
-	for _, z := range *items{
-
-		self.Conn.ZRem(self.Prefix + "data:" + data.Name, z.Member)
-	}
-}
-
-func (self *RedisSeriesStore) listIDs(data SeriesSearch) *[]redis.Z{
-
-	search_id := simpleflake.NewId().String()
+func (self *RedisSeriesStore) getRawResults(data SeriesSearch) *[]redis.Z{
 
 	// Get the start and end times for the search
 	score := getDataBetweenScore(data)
 
-	message := "Searching series: " + data.Name + " between range " + score.Min + " and " + score.Max
+	zvalkey := self.Prefix + "data:" + data.Name
 
-	// Store all applicable zval index keys in a slice
-	zvalkeys := getZvalKeysForSearch(data, self.Prefix)
+	message := fmt.Sprintf("Searching series: %s between range %s and %s on key %s", data.Name, score.Min, score.Max, zvalkey)
 
-	var result *redis.ZSliceCmd
+	log.Debug(message)
 
-	// If more than one zval do a zinterstore between ranges
-	if len(zvalkeys) > 1 {
-
-		log.Debug(message + " using index merge on " + strconv.Itoa(len(zvalkeys)) + " indexes")
-
-		indexkey := self.Prefix + "search:tmp:" + data.Name + ":" + search_id
-
-		multi := self.Conn.Multi()
-
-		_, err := multi.Exec(func() error{
-
-			multi.ZInterStore(indexkey, redis.ZStore{Aggregate : "MIN"}, zvalkeys...)
-			result = multi.ZRangeByScoreWithScores(indexkey, score)
-			multi.Del(indexkey)
-
-			return nil
-		})
-
-		if err != nil {
-			panic(err)
-		}
-
-	}else{
-
-		log.Debug(message + " using primary key: " + zvalkeys[0])
-
-		result = self.Conn.ZRangeByScoreWithScores(zvalkeys[0], score)
-	}
+	result := self.Conn.ZRangeByScoreWithScores(zvalkey, score)
 
 	items, err := result.Result()
 
@@ -218,6 +148,42 @@ func (self *RedisSeriesStore) listIDs(data SeriesSearch) *[]redis.Z{
 	return &items
 }
 
+func (self *RedisSeriesStore) Search(data SeriesSearch) *Results{
+
+	items := self.getRawResults(data)
+
+	if !data.Group.Enabled {
+		return self.searchKeys(data, items)
+	}
+
+	return self.searchGroupedKeys(data, items)
+}
+
+func (self *RedisSeriesStore) Delete(data SeriesSearch){
+
+	// Get the start and end times for the search
+	score := getDataBetweenScore(data)
+
+	zvalkey := self.Prefix + "data:" + data.Name
+
+	message := fmt.Sprintf("Deleting from series: %s between range %s and %s on key %s", data.Name, score.Min, score.Max, zvalkey)
+
+	log.Debug(message)
+
+	result := self.Conn.ZRemRangeByScore(zvalkey, score.Min, score.Max)
+
+	items, err := result.Result()
+
+	if err != nil {
+		panic(err)
+	}
+
+	message = fmt.Sprintf("Deleted %d items from series: %s between range %s and %s on key %s", items, data.Name, score.Min, score.Max, zvalkey)
+
+	log.Debug(message)
+
+	self.DeleteSeriesIfEmpty(data.Name)
+}
 
 func resultMapToResultArray(m *ResultsMap) *Results{
 	vals := make(Results, len(*m))
@@ -260,7 +226,7 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 			}
 		}
 
-		for target, source := range data.Values{
+		for target, source := range data.Values {
 
 			if source.Type == "COUNT" {
 
@@ -327,40 +293,29 @@ func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
 		return fmt.Errorf("Attempted to insert empty value set into series: " + data.Name)
 	}
 
-	//log.Debug("Inserting data point into series: " + data.Name)
-
 	val_str, _ := json.Marshal(StorageDataPacket{Id : data.Id, Value : data.Value})
 
 	z_val := redis.Z{Score: data.Time, Member: string(val_str)}
 
-	self.Conn.Multi().Exec(func() error{
 
-		self.Conn.ZAdd(self.Prefix + "meta:events", redis.Z{Score: data.Time, Member: data.Name})
+	self.Conn.SAdd(self.Prefix + "meta:series", data.Name)
 
-		self.Conn.ZAdd(self.Prefix + "data:" + data.Name, z_val)
-
-		for k,v := range data.Tags {
-			self.Conn.ZAdd(self.Prefix + "data:" + data.Name + ":tags:" + k + ":" + v, z_val)
-		}
-
-		return nil
-	})
+	self.Conn.ZAdd(self.Prefix + "data:" + data.Name, z_val)
 
 	return nil
 }
 
 func (self *RedisSeriesStore) ListSeries(filter string) []Series{
 
-	val, _ := self.Conn.ZRangeWithScores(self.Prefix + "meta:events", 0, -1).Result()
+	val, _ := self.Conn.SMembers(self.Prefix + "meta:series").Result()
 
 	var results = make([]Series, 0)
 
 	for _, z := range val{
 
-		if(filter != "" && glob.Glob(filter, z.Member)){
+		if(filter != "" && glob.Glob(filter, z)){
 			point := Series{
-				Name: z.Member,
-				Created: z.Score,
+				Name: z,
 			}
 
 			results = append(results, point)
@@ -370,34 +325,34 @@ func (self *RedisSeriesStore) ListSeries(filter string) []Series{
 	return results
 }
 
-func (self *RedisSeriesStore) DeleteSeries(series string) error{
-
-	var cursor int64
-	var items []string
+func (self *RedisSeriesStore) DeleteSeriesIfEmpty(series string) error{
 
 	log.Info("Deleting series: " + series)
 
-	for {
-		cursor, items, _ = self.Conn.Scan(cursor, self.Prefix + "data:" + series + ":tags:*", 1000).Result()
+	key := self.Prefix + "data:" + series
 
-		if len(items) == 0 {
-			return nil
-		}
+	size := self.Conn.ZCard(key).Val()
 
-		self.Conn.Multi().Exec(func() error{
-
-			self.Conn.Del(self.Prefix + "data:" + series)
-
-			for _, key := range items {
-
-				self.Conn.Del(key)
-
-				log.Debug("Deleting key: " + key + " from series: " + series)
-			}
-
-			return nil
-		})
+	if size == 0 {
+		self.Conn.SRem(self.Prefix + "meta:series", series)
 	}
+
+	size = self.Conn.ZCard(key).Val()
+
+	if size > 0 {
+		self.Conn.SAdd(self.Prefix + "meta:series", series)
+	}
+
+	return nil
+}
+
+func (self *RedisSeriesStore) DeleteSeries(series string) error{
+
+	log.Info("Deleting series: " + series)
+
+	self.Conn.ZRem(self.Prefix + "meta:series", series)
+
+	self.Conn.Del(self.Prefix + "data:" + series)
 
 	return nil
 }
