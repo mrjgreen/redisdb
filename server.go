@@ -19,38 +19,20 @@ type Server struct {
 	ContinuousQueryManager *ContinuousQueryManager
 }
 
-func newLogger(c *LogConfig) log.Logger{
-
-	if !c.Enabled{
-		return nil
-	}
-
-	var l = log.New()
-
-	level, err := log.LvlFromString(c.Level)
-
-	if err != nil{
-		panic("Level could not be read")
-	}
-
-	l.SetHandler(log.LvlFilterHandler(
-		level,
-		log.StreamHandler(os.Stderr, log.TerminalFormat()),
-	))
-
-	return l
-}
-
 // NewServer returns a new instance of Server built from a config.
 func NewServer(c *Config) (*Server, error) {
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     c.Redis.Host,
 		Password: c.Redis.Auth,
-		DB:       0,
+		DB:       c.Redis.Database,
 	})
 
-	log := newLogger(c.Log)
+	log, err := NewLogger(c.Log)
+
+	if err != nil {
+		return nil, err
+	}
 
 	store := &RedisSeriesStore{
 		Conn : client,
@@ -91,41 +73,41 @@ func NewServer(c *Config) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) runTestInserts() error {
-
-	s.Log.Info("Running test inserts")
-
-	s.RetentionPolicyManager.Delete("events*")
-	s.RetentionPolicyManager.Add(RetentionPolicy{"events", uint64(120)})
-
-	var i = 0
-
-	for {
-
-		i++
-		var campaignTag string
-
-		if i % 4 == 0 {
-			campaignTag = "123"
-		}else if i % 7 == 0 {
-			campaignTag = "456"
-		}else {
-			campaignTag = "789"
-		}
-
-		point := NewDataPoint(DataValue{
-			"value" : strconv.Itoa(i),
-			"event" : strconv.Itoa(i % 5),
-			"campaign" : campaignTag,
-		})
-
-		s.Store.AddDataPoint("events", point)
-
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	return  nil
-}
+//func (s *Server) runTestInserts() error {
+//
+//	s.Log.Info("Running test inserts")
+//
+//	s.RetentionPolicyManager.Delete("events*")
+//	s.RetentionPolicyManager.Add(RetentionPolicy{"events", uint64(120)})
+//
+//	var i = 0
+//
+//	for {
+//
+//		i++
+//		var campaignTag string
+//
+//		if i % 4 == 0 {
+//			campaignTag = "123"
+//		}else if i % 7 == 0 {
+//			campaignTag = "456"
+//		}else {
+//			campaignTag = "789"
+//		}
+//
+//		point := NewDataPoint(DataValue{
+//			"value" : strconv.Itoa(i),
+//			"event" : strconv.Itoa(i % 5),
+//			"campaign" : campaignTag,
+//		})
+//
+//		s.Store.AddDataPoint("events", point)
+//
+//		time.Sleep(10 * time.Millisecond)
+//	}
+//
+//	return  nil
+//}
 
 func (s *Server) Start() error {
 
