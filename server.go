@@ -14,6 +14,7 @@ import (
 type Server struct {
 	Log log.Logger
 	Store SeriesStore
+	Http *HttpInterface
 	RetentionPolicyManager *RetentionPolicyManager
 	ContinuousQueryManager *ContinuousQueryManager
 }
@@ -73,9 +74,16 @@ func NewServer(c *Config) (*Server, error) {
 		Log: log,
 	}
 
+	http := &HttpInterface{
+		BindAddress : c.HTTP.Port,
+		Store : store,
+		Log : log,
+	}
+
 	s := &Server{
 		Store : store,
 		Log : log,
+		Http : http,
 		RetentionPolicyManager : retention,
 		ContinuousQueryManager : cq,
 	}
@@ -121,6 +129,7 @@ func (s *Server) runTestInserts() error {
 
 func (s *Server) Start() error {
 
+	s.Http.Start()
 	s.RetentionPolicyManager.Start()
 	s.ContinuousQueryManager.Start()
 

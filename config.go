@@ -12,11 +12,6 @@ type HTTPConfig struct {
 	Port 		string	`toml:"port"`
 }
 
-type TCPConfig struct {
-	Enabled		bool	`toml:"enabled"`
-	Port 		string	`toml:"port"`
-}
-
 type RetentionConfig struct {
 	CheckInterval	string `toml:"check-interval"`
 }
@@ -36,7 +31,6 @@ type Config struct {
 	Log       	*LogConfig       	`toml:"log"`
 	Retention  	*RetentionConfig   	`toml:"retention"`
 	HTTP		*HTTPConfig			`toml:"http"`
-	TCP			*TCPConfig           `toml:"tcp"`
 	ContinuousQuery *ContinuousQueryConfig `toml:"continuous_queries"`
 }
 
@@ -60,11 +54,7 @@ func NewConfig() *Config {
 		},
 		HTTP : &HTTPConfig{
 			Enabled : true,
-			Port : "8086",
-		},
-		TCP : &TCPConfig{
-			Enabled : true,
-			Port : "6086",
+			Port : "localhost:8086",
 		},
 	}
 
