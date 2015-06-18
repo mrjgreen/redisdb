@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -27,7 +28,7 @@ func start(args ...string) error {
 
 	config := NewConfig()
 
-	if(len(args) < 1) {
+	if(len(args) > 0) {
 
 		fmt.Printf("Loading configuration from file: %s\n", args[0])
 

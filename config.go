@@ -1,11 +1,15 @@
 package main
 
+import (
+	"github.com/BurntSushi/toml"
+)
+
 type RedisConfig struct {
 	Host 		string	`toml:"host"`
 	//Sentinel 	bool	`toml:"sentinel"`
 	Auth 		string	`toml:"auth"`
 	KeyPrefix 	string	`toml:"key-prefix"`
-	Database	string  `toml:"database"`
+	Database	int64  `toml:"database"`
 }
 
 type HTTPConfig struct {

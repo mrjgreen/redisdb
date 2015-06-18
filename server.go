@@ -1,9 +1,6 @@
 package main
 
 import (
-	"os"
-	"time"
-	"strconv"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 )
