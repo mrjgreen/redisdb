@@ -49,7 +49,6 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
 		self.Store.Delete(search)
 	}
-
 }
 
 func (self *RetentionPolicyManager) List() []RetentionPolicy {

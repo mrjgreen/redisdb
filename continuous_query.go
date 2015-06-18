@@ -2,6 +2,7 @@ package main
 
 import (
 	"time"
+	"fmt"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 )
@@ -15,7 +16,9 @@ type ContinuousQueryManager struct{
 }
 
 type ContinuousQuery struct{
-
+	TargetSeries string
+	Granularity string
+	Query SeriesSearch
 }
 
 func (self *ContinuousQueryManager) Add(){
@@ -26,31 +29,56 @@ func (self *ContinuousQueryManager) Delete(){
 
 }
 
-func (self *ContinuousQueryManager) Apply(){
+func (self *ContinuousQueryManager) Apply(query ContinuousQuery){
 
 	// Calculate last two time periods based on granularity
 
+	self.Log.Info(fmt.Sprintf("Applying continuouse query '%s' with granularity '%s'", query.TargetSeries, query.Granularity))
+
+	now := time.Now()
+
+	var interval,_ = time.ParseDuration(query.Granularity);
+
+	// Calculate and set the time range for the query.
+	startTime := now.Round(interval)
+
+	if startTime.UnixNano() > now.UnixNano() {
+		startTime = startTime.Add(-interval)
+	}
+
+	query.Query.Between.End = float64(startTime.Add(interval).UnixNano()) / 1e9
+	query.Query.Between.Start = float64(startTime.UnixNano()) / 1e9
+
 	// Perform search and group by
+	results := self.Store.Search(query.Query)
 
-	// Using multi exec
-	// Delete from store where time between X AND X (same time stamp inclusive should only delete one range)
-	// Insert into new key
+	self.Store.Delete(SeriesSearch{
+		Name : query.TargetSeries,
+		Between : SearchTimeRange{
+			Start : query.Query.Between.Start,
+			End : query.Query.Between.Start,
+		},
+	})
 
+	for _, point := range *results{
+
+		self.Store.AddDataPoint(query.TargetSeries, &DataPoint{
+			Value : point.Value,
+			Time : query.Query.Between.Start,
+		})
+	}
 }
 
-func (self *RetentionPolicyManager) List() []ContinuousQuery {
+func (self *ContinuousQueryManager) List() []ContinuousQuery {
 
 	items := self.Conn.HGetAllMap(self.Prefix + "config:continuous_query")
 
 	var queries = make([]ContinuousQuery, 0)
 
-	for name, time := range items.Val(){
+	for _, _ = range items.Val(){
 
-		timeint,_ := strconv.ParseUint(time, 10, 64)
+		query := ContinuousQuery{
 
-		policy := RetentionPolicy{
-			Name : name,
-			TimeSeconds : timeint,
 		}
 
 		queries = append(queries, query)
@@ -67,6 +95,23 @@ func (self *ContinuousQueryManager) Start(){
 		for {
 			// Read continuous query configurations
 			self.Log.Info("Checking continuous queries after " + self.ComputeInterval)
+
+			self.Apply(ContinuousQuery{
+				Granularity : "1m",
+				TargetSeries : "events_10m",
+				Query : SeriesSearch{
+					Name: "events",
+					Values: SearchValues{
+						"campaign" : SearchValue{Column:"campaign"},
+						"event" : SearchValue{Column:"event"},
+						"count" : SearchValue{Type:"COUNT"},
+						"value" : SearchValue{Type:"SUM", Column:"value"},
+					},
+					Group : SearchGroupBy{
+						Enabled : true,
+					},
+				},
+			})
 
 			time.Sleep(duration)
 		}

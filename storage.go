@@ -16,8 +16,6 @@ type DataValue map[string]interface{}
 type DataTags map[string]string
 
 type DataPoint struct{
-	Name string
-	Id string
 	Value DataValue
 	Time float64
 }
@@ -45,18 +43,9 @@ type SeriesSearch struct{
 	Group SearchGroupBy
 }
 
-func NewSearchOlderThan(name string, age_seconds uint64) SeriesSearch{
-	return SeriesSearch{
-		Name : name,
-		Between : SearchTimeRange{
-			End : float64(uint64(time.Now().Unix()) - age_seconds),
-		},
-	}
-}
-
 type SeriesStore interface{
-	AddDataPoint(*DataPoint) error
-	DeleteSeries(string) error
+	AddDataPoint(series string, data *DataPoint) error
+	DeleteSeries(series string) error
 	Search(data SeriesSearch) *Results
 	Delete(data SeriesSearch)
 	ListSeries(filter string) []Series
@@ -68,18 +57,27 @@ type RedisSeriesStore struct{
 	Log log.Logger
 }
 
-type Results []*ResultPoint
-type ResultsMap map[string]*ResultPoint
+type Results []*DataPoint
 
-type ResultPoint struct{
-	Id string
-	Value DataValue
-	Time float64
-}
+type ResultsMap map[string]*DataPoint
 
 type Series struct {
 	Name string
 	Created float64
+}
+
+type storagePacket struct {
+	Id string
+	Value DataValue
+}
+
+func NewSearchOlderThan(name string, age_seconds uint64) SeriesSearch{
+	return SeriesSearch{
+		Name : name,
+		Between : SearchTimeRange{
+			End : float64(uint64(time.Now().Unix()) - age_seconds),
+		},
+	}
 }
 
 func expandMapToArray(m map[string]string) []string{
@@ -93,11 +91,9 @@ func expandMapToArray(m map[string]string) []string{
 	return arr
 }
 
-func NewDataPoint(name string, values DataValue) *DataPoint{
+func NewDataPoint(values DataValue) *DataPoint{
 	return &DataPoint{
-		Name : name,
 		Value : values,
-		Id : simpleflake.NewId().String(),
 		Time : float64(time.Now().Unix()),
 	}
 }
@@ -205,7 +201,7 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 
 		var group = make([]string, 0)
 
-		var record StorageDataPacket
+		var record storagePacket
 
 		json.Unmarshal([]byte(z.Member), &record)
 
@@ -219,10 +215,9 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 
 		if results[groupstr] == nil {
 
-			results[groupstr] = &ResultPoint{
+			results[groupstr] = &DataPoint{
 				Value : DataValue{},
 				Time : z.Score,
-				Id : simpleflake.NewId().String(),
 			}
 		}
 
@@ -260,7 +255,7 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 
 	for _, z := range *ids{
 
-		var record StorageDataPacket
+		var record storagePacket
 
 		json.Unmarshal([]byte(z.Member), &record)
 
@@ -270,10 +265,9 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 //			values[target] = record.Value[source.Column]
 //		}
 
-		point := &ResultPoint{
+		point := &DataPoint{
 			Value : record.Value,
 			Time : z.Score,
-			Id : record.Id,
 		}
 
 		results = append(results, point)
@@ -282,25 +276,20 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 	return &results
 }
 
-type StorageDataPacket struct {
-	Id string
-	Value DataValue
-}
-
-func (self *RedisSeriesStore) AddDataPoint(data *DataPoint) error{
+func (self *RedisSeriesStore) AddDataPoint(series string, data *DataPoint) error{
 
 	if data.Value == nil{
-		return fmt.Errorf("Attempted to insert empty value set into series: " + data.Name)
+		return fmt.Errorf("Attempted to insert empty value set into series: " + series)
 	}
 
-	val_str, _ := json.Marshal(StorageDataPacket{Id : data.Id, Value : data.Value})
+	val_str, _ := json.Marshal(storagePacket{Id : simpleflake.NewId().String(), Value : data.Value})
 
 	z_val := redis.Z{Score: data.Time, Member: string(val_str)}
 
 
-	self.Conn.SAdd(self.Prefix + "meta:series", data.Name)
+	self.Conn.SAdd(self.Prefix + "meta:series", series)
 
-	self.Conn.ZAdd(self.Prefix + "data:" + data.Name, z_val)
+	self.Conn.ZAdd(self.Prefix + "data:" + series, z_val)
 
 	return nil
 }

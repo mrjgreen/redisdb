@@ -38,13 +38,13 @@ func TestRedis(t *testing.T)  {
 			campaignTag = "789"
 		}
 
-		point := NewDataPoint(stream, DataValue{
+		point := NewDataPoint(DataValue{
 			"value" : strconv.Itoa(i),
 			"event" : strconv.Itoa(i % 5),
 			"campaign" : campaignTag,
 		})
 
-		store.AddDataPoint(point)
+		store.AddDataPoint(stream, point)
 	}
 
 	endTime := float64(time.Now().Unix() + 1)
