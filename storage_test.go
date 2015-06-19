@@ -26,7 +26,7 @@ func TestRedis(t *testing.T)  {
 
 	startTime := float64(time.Now().Unix() - 1)
 
-	for i := 0; i < 100000; i++{
+	for i := 0; i < 10000; i++{
 
 		var campaignTag string
 
@@ -50,7 +50,6 @@ func TestRedis(t *testing.T)  {
 	endTime := float64(time.Now().Unix() + 1)
 
 	search := SeriesSearch{
-		Name: stream,
 		Between: SearchTimeRange{
 			Start : startTime,
 			End : endTime,
@@ -67,14 +66,14 @@ func TestRedis(t *testing.T)  {
 		},
 	}
 
-	results := store.Search(search)
+	results := store.Search(stream, search)
 
 
 	assert.Equal(t, 15, len(*results), "Campaign 123 result count")
 
-	store.Delete(search)
+	store.Delete(stream, search)
 
-	results = store.Search(search)
+	results = store.Search(stream, search)
 
 	assert.Equal(t, 0, len(*results), "Campaign 123 result count should now be empty")
 

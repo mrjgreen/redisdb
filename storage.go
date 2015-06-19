@@ -8,7 +8,7 @@ import (
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 	"./simpleflake"
-	"github.com/ryanuber/go-glob"
+	"./glob"
 )
 
 type DataValue map[string]interface{}
@@ -16,8 +16,9 @@ type DataValue map[string]interface{}
 type DataTags map[string]string
 
 type DataPoint struct{
-	Value DataValue
-	Time float64
+	Values DataValue `json:"values"`
+	Time float64 `json:"-"`
+	Timestr string `json:"time"`
 }
 
 type SearchTimeRange struct {
@@ -91,7 +92,7 @@ func expandMapToArray(m map[string]string) []string{
 
 func NewDataPoint(values DataValue) *DataPoint{
 	return &DataPoint{
-		Value : values,
+		Values : values,
 		Time : float64(time.Now().Unix()),
 	}
 }
@@ -103,7 +104,8 @@ func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 	if data.Between.End == float64(0) {
 		end = "inf"
 	}else{
-		end = strconv.FormatFloat(data.Between.End, 'f', -1, 64)
+		// Exclusive last item makes everything more convenient
+		end = "(" + strconv.FormatFloat(data.Between.End, 'f', -1, 64)
 	}
 
 	if data.Between.Start == float64(0) {
@@ -214,7 +216,7 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 		if results[groupstr] == nil {
 
 			results[groupstr] = &DataPoint{
-				Value : DataValue{},
+				Values : DataValue{},
 				Time : z.Score,
 			}
 		}
@@ -223,23 +225,23 @@ func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, ids *[]redis.
 
 			if source.Type == "COUNT" {
 
-				if results[groupstr].Value[target] == nil {
-					results[groupstr].Value[target] = 0
+				if results[groupstr].Values[target] == nil {
+					results[groupstr].Values[target] = 0
 				}
 
-				results[groupstr].Value[target] = results[groupstr].Value[target].(int) + 1
+				results[groupstr].Values[target] = results[groupstr].Values[target].(int) + 1
 
 			}else if source.Type == "SUM" {
 
-				if results[groupstr].Value[target] == nil {
-					results[groupstr].Value[target] = 0.0
+				if results[groupstr].Values[target] == nil {
+					results[groupstr].Values[target] = 0.0
 				}
 
 				flt, _ := strconv.ParseFloat(record.Value[source.Column].(string), 64)
 
-				results[groupstr].Value[target] = results[groupstr].Value[target].(float64) + flt
+				results[groupstr].Values[target] = results[groupstr].Values[target].(float64) + flt
 			}else {
-				results[groupstr].Value[target] = record.Value[source.Column].(string)
+				results[groupstr].Values[target] = record.Value[source.Column].(string)
 			}
 		}
 	}
@@ -264,8 +266,9 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 //		}
 
 		point := &DataPoint{
-			Value : record.Value,
+			Values : record.Value,
 			Time : z.Score,
+			Timestr : strconv.FormatFloat(z.Score, 'f', -1, 64),
 		}
 
 		results = append(results, point)
@@ -276,7 +279,7 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 
 func (self *RedisSeriesStore) AddDataPoint(series string, data *DataPoint) error{
 
-	if data.Value == nil{
+	if data.Values == nil{
 		return fmt.Errorf("Attempted to insert empty value set into series: " + series)
 	}
 
@@ -284,9 +287,7 @@ func (self *RedisSeriesStore) AddDataPoint(series string, data *DataPoint) error
 		data.Time = float64(time.Now().Unix())
 	}
 
-	log.Info("Adding data to series: " + series)
-
-	val_str, _ := json.Marshal(storagePacket{Id : simpleflake.NewId().String(), Value : data.Value})
+	val_str, _ := json.Marshal(storagePacket{Id : simpleflake.NewId().String(), Value : data.Values})
 
 	z_val := redis.Z{Score: data.Time, Member: string(val_str)}
 
@@ -306,7 +307,9 @@ func (self *RedisSeriesStore) ListSeries(filter string) []Series{
 
 	for _, z := range val{
 
-		if(filter != "" && glob.Glob(filter, z)){
+		var matches glob.GlobMatches
+
+		if(filter != "" && glob.Glob(filter, z, &matches)){
 			point := Series{
 				Name: z,
 			}

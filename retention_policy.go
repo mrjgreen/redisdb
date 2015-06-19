@@ -48,8 +48,6 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 		search := NewSearchOlderThan(policy.TimeSeconds)
 
 		self.Store.Delete(series.Name, search)
-
-		return
 	}
 }
 
@@ -78,17 +76,15 @@ func (self *RetentionPolicyManager) Start(){
 
 	var duration,_ = time.ParseDuration(self.CheckInterval);
 
-	go func(){
-		for {
-			self.Log.Info("Checking retention policies after " + self.CheckInterval)
+	for {
+		self.Log.Info("Checking retention policies after " + self.CheckInterval)
 
-			policies := self.List()
+		policies := self.List()
 
-			for _, policy := range policies{
-				self.ApplyPolicy(policy)
-			}
-
-			time.Sleep(duration)
+		for _, policy := range policies{
+			self.ApplyPolicy(policy)
 		}
-	}()
+
+		time.Sleep(duration)
+	}
 }

@@ -14,6 +14,7 @@ type Server struct {
 	Http *HttpInterface
 	RetentionPolicyManager *RetentionPolicyManager
 	ContinuousQueryManager *ContinuousQueryManager
+	BenchMark *BenchMark
 }
 
 // NewServer returns a new instance of Server built from a config.
@@ -59,64 +60,54 @@ func NewServer(c *Config) (*Server, error) {
 		Log : log,
 	}
 
+	test := &BenchMark{
+		Store : store,
+		Log: log,
+		RetentionPolicyManager: retention,
+		ContinuousQueryManager: cq,
+	}
+
 	s := &Server{
 		Store : store,
 		Log : log,
 		Http : http,
 		RetentionPolicyManager : retention,
 		ContinuousQueryManager : cq,
+		BenchMark : test,
 	}
 
 	return s, nil
 }
 
-//func (s *Server) runTestInserts() error {
-//
-//	s.Log.Info("Running test inserts")
-//
-//	s.RetentionPolicyManager.Delete("events*")
-//	s.RetentionPolicyManager.Add(RetentionPolicy{"events", uint64(120)})
-//
-//	var i = 0
-//
-//	for {
-//
-//		i++
-//		var campaignTag string
-//
-//		if i % 4 == 0 {
-//			campaignTag = "123"
-//		}else if i % 7 == 0 {
-//			campaignTag = "456"
-//		}else {
-//			campaignTag = "789"
-//		}
-//
-//		point := NewDataPoint(DataValue{
-//			"value" : strconv.Itoa(i),
-//			"event" : strconv.Itoa(i % 5),
-//			"campaign" : campaignTag,
-//		})
-//
-//		s.Store.AddDataPoint("events", point)
-//
-//		time.Sleep(10 * time.Millisecond)
-//	}
-//
-//	return  nil
-//}
-
 func (s *Server) Start() error {
 
-	s.Http.Start()
-	s.RetentionPolicyManager.Start()
-	s.ContinuousQueryManager.Start()
+	go s.Http.Start()
+	go s.RetentionPolicyManager.Start()
+	go s.ContinuousQueryManager.Start()
 
 	s.Log.Info("Started server")
 
-	//go s.runTestInserts()
+	s.RetentionPolicyManager.Delete("click:raw:c:*")
 
-	return  nil
+	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", uint64(20 * 60)})
+
+	s.ContinuousQueryManager.Add(ContinuousQuery{
+		SourceSeries : "click:raw:c:*",
+		TargetSeries : "click:10m:c:*", // The glob pattern of source will be mapped onto the target
+		Granularity : "10m",
+		Query : SeriesSearch{
+			Values: SearchValues{
+				"count" : SearchValue{Type:"COUNT"},
+			},
+			Group : SearchGroupBy{
+				Enabled : true,
+			},
+		},
+	})
+
+	//go s.BenchMark.Start()
+
+	return nil
 }
 
 func (s *Server) Stop() error {

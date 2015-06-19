@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"encoding/json"
 	"github.com/ant0ine/go-json-rest/rest"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
@@ -21,6 +22,10 @@ func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
 
 	err := r.DecodeJsonPayload(data)
 
+	println(series)
+	str, _ := json.Marshal(data)
+	println(string(str))
+
 	if err != nil {
 		rest.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -36,13 +41,13 @@ func (self *HttpInterface) ReadCommand(w rest.ResponseWriter, r *rest.Request){
 	series := r.PathParam("series")
 
 	search := SeriesSearch{}
-
-	err := r.DecodeJsonPayload(&search)
-
-	if err != nil {
-		rest.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+//
+//	err := r.DecodeJsonPayload(&search)
+//
+//	if err != nil {
+//		rest.Error(w, err.Error(), http.StatusInternalServerError)
+//		return
+//	}
 
 	results := self.Store.Search(series, search)
 
@@ -65,12 +70,10 @@ func (self *HttpInterface) Start() error {
 
 	api.SetApp(router)
 
-	// Begin listening for requests in a separate goroutine.
-	go func(){
-		http.ListenAndServe(self.BindAddress, api.MakeHandler())
-	}()
-
 	self.Log.Info(fmt.Sprintf("Started HTTP interface on %s", self.BindAddress))
+
+	// Begin listening for requests in a separate goroutine.
+	http.ListenAndServe(self.BindAddress, api.MakeHandler())
 
 	return nil
 }

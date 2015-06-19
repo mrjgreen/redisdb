@@ -60,11 +60,11 @@ func NewConfig() *Config {
 		},
 		ContinuousQuery : &ContinuousQueryConfig{
 			Enabled : true,
-			ComputeInterval : "10s",
+			ComputeInterval : "5s",
 		},
 		HTTP : &HTTPConfig{
 			Enabled : true,
-			Port : "localhost:8086",
+			Port : ":8086",
 		},
 	}
 
