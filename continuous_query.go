@@ -92,7 +92,7 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 
 		// Todo - apply in transaction
 		self.Store.Delete(targetSeries, SeriesSearch{
-				Between : SearchTimeRange{
+			Between : SearchTimeRange{
 				Start : query.Query.Between.Start,
 				End : query.Query.Between.Start,
 			},

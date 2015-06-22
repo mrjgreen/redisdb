@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"encoding/json"
+	//"encoding/json"
 	"github.com/ant0ine/go-json-rest/rest"
 	log "gopkg.in/inconshreveable/log15.v2"
 )
@@ -22,9 +22,7 @@ func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
 
 	err := r.DecodeJsonPayload(data)
 
-	println(series)
-	str, _ := json.Marshal(data)
-	println(string(str))
+	//str, _ := json.Marshal(data)
 
 	if err != nil {
 		rest.Error(w, err.Error(), http.StatusInternalServerError)

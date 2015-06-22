@@ -105,7 +105,7 @@ func getDataBetweenScore(data SeriesSearch) redis.ZRangeByScore{
 		end = "inf"
 	}else{
 		// Exclusive last item makes everything more convenient
-		end = "(" + strconv.FormatFloat(data.Between.End, 'f', -1, 64)
+		end = strconv.FormatFloat(data.Between.End, 'f', -1, 64)
 	}
 
 	if data.Between.Start == float64(0) {
