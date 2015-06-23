@@ -16,18 +16,7 @@ type storagePacket struct {
 	Value DataValue
 }
 
-type resultsMap map[string]string
-
-func expandMapToArray(m map[string]string) []string{
-
-	arr := make([]string,0)
-
-	for k,v := range m {
-		arr = append(arr, k, v)
-	}
-
-	return arr
-}
+type resultsMap map[string]interface{}
 
 // The results map is a temporary struct used to bucket items when grouping
 // This function returns converts the struct to a real Results object containing
@@ -38,7 +27,7 @@ func (m *resultsMap) getResults() *Results{
 	i := 0
 	for _,v := range *m {
 		vals[i] = v
-		i += 1
+		i++
 	}
 
 	return &vals
@@ -60,16 +49,17 @@ func (self SearchTimeRange) convertToZRange() redis.ZRangeByScore{
 	}
 }
 
-func (self *RedisSeriesStore) getRawResults(series string, data SeriesSearch) *[]redis.Z{
+func seriesLog(action, series, key, start, end string){
+	log.Debug(fmt.Sprintf("%s series: %s on key %s between %s and %s", action, series, key, start, end))
+}
 
-	// Get the start and end times for the search
-	score := data.Between.convertToZRange()
+func (self *RedisSeriesStore) getRawResults(series string, between SearchTimeRange) *[]redis.Z{
+
+	score := between.convertToZRange()
 
 	zvalkey := self.Prefix + "data:" + series
 
-	message := fmt.Sprintf("Searching series: %s between range %s and %s on key %s", series, score.Min, score.Max, zvalkey)
-
-	log.Debug(message)
+	seriesLog("Searching", series, zvalkey, score.Min, score.Max)
 
 	result := self.Conn.ZRangeByScoreWithScores(zvalkey, score)
 
@@ -100,9 +90,7 @@ func (self *RedisSeriesStore) Delete(series string, between SearchTimeRange){
 
 	zvalkey := self.Prefix + "data:" + series
 
-	message := fmt.Sprintf("Deleting from series: %s between range %s and %s on key %s", series, score.Min, score.Max, zvalkey)
-
-	log.Debug(message)
+	seriesLog("Deleting", series, zvalkey, score.Min, score.Max)
 
 	result := self.Conn.ZRemRangeByScore(zvalkey, score.Min, score.Max)
 
@@ -112,98 +100,21 @@ func (self *RedisSeriesStore) Delete(series string, between SearchTimeRange){
 		panic(err)
 	}
 
-	message = fmt.Sprintf("Deleted %d items from series: %s between range %s and %s on key %s", items, series, score.Min, score.Max, zvalkey)
-
-	log.Debug(message)
+	seriesLog(fmt.Sprintf("Deleted %d items from", items), series, zvalkey, score.Min, score.Max)
 
 	self.DeleteSeriesIfEmpty(series)
 }
 
 
-func initializeQuery(values SearchValues){
-
-	var queries map[string]interface{}
-
-	for target, source := range values {
-
-	}
-}
-
 func (self *RedisSeriesStore) searchGroupedKeys(data SeriesSearch, records *[]redis.Z) *Results{
-
-	var results = make(resultsMap,0)
-
-
-	query := initializeQuery(data.Values)
-
-
-	for _, z := range *records{
-
-		var group = make([]string, 0)
-
-		var record storagePacket
-
-		json.Unmarshal([]byte(z.Member), &record)
-
-		for _, col := range data.Group.Values {
-			group = append(group, col, record.Value[col].(string))
-		}
-
-		groupbyte, _ := json.Marshal(group)
-
-		groupstr := string(groupbyte)
-
-		if results[groupstr] == nil {
-
-			results[groupstr] = &DataPoint{
-				Values : DataValue{},
-				Time : z.Score,
-			}
-		}
-
-		for target, source := range data.Values {
-
-			if source.Type == "COUNT" {
-
-				if results[groupstr].Values[target] == nil {
-					results[groupstr].Values[target] = 0
-				}
-
-				results[groupstr].Values[target] = results[groupstr].Values[target].(int) + 1
-
-			}else if source.Type == "SUM" {
-
-				if results[groupstr].Values[target] == nil {
-					results[groupstr].Values[target] = 0.0
-				}
-
-				flt, _ := strconv.ParseFloat(record.Value[source.Column].(string), 64)
-
-				results[groupstr].Values[target] = results[groupstr].Values[target].(float64) + flt
-			}else {
-				results[groupstr].Values[target] = record.Value[source.Column].(string)
-			}
-		}
-	}
-
-	return results.getResults()
-}
-
-func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Results{
 
 	var results = Results{}
 
-	for _, z := range *ids{
+	for _, z := range *records{
 
 		var record storagePacket
 
 		json.Unmarshal([]byte(z.Member), &record)
-
-//		values := DataValue{}
-//
-//		for target, source := range data.Values{
-//			values[target] = record.Value[source.Column]
-//		}
 
 		point := &DataPoint{
 			Values : record.Value,
@@ -214,7 +125,7 @@ func (self *RedisSeriesStore) searchKeys(data SeriesSearch, ids *[]redis.Z) *Res
 		results = append(results, point)
 	}
 
-	return &results
+	return results.getResults()
 }
 
 func (self *RedisSeriesStore) AddDataPoint(series string, data *DataPoint) error{

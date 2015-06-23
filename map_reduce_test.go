@@ -7,7 +7,7 @@ import (
 
 func TestCountReduce(t *testing.T) {
 
-	handler := NewReduceHandler(&ReduceCount{})
+	handler := NewReduceHandler(ReduceCount{})
 
 	item := []string{"foo", "bar", "fizz", "fizz", "fizz", "fuzz", "buzz", "baz"}
 
@@ -22,7 +22,7 @@ func TestCountReduce(t *testing.T) {
 
 func TestCountDistinctReduce(t *testing.T) {
 
-	handler := NewReduceHandler(&ReduceCountDistinct{})
+	handler := NewReduceHandler(ReduceCountDistinct{})
 
 	item := []string{"foo", "foo", "bar", "fizz", "fizz", "fizz", "fuzz", "buzz", "baz", "baz"}
 
@@ -37,7 +37,7 @@ func TestCountDistinctReduce(t *testing.T) {
 
 func TestMeanAvgReduce(t *testing.T) {
 
-	handler := NewReduceHandler(&ReduceMeanAvg{})
+	handler := NewReduceHandler(ReduceMeanAvg{})
 
 	item := []float64{1.0, 2.5, 5.3, 1, 7.8, 456}
 
@@ -47,5 +47,20 @@ func TestMeanAvgReduce(t *testing.T) {
 
 	result := handler.Result()
 
-	assert.InDelta(t, 78.9333333333, result, 0.000001, "Result should equal the mean avergage of the items in the item array")
+	assert.InDelta(t, 78.9333333, result, 0.000001, "Result should equal the mean avergage of the items in the item array")
+}
+
+func TestSumReduce(t *testing.T) {
+
+	handler := NewReduceHandler(ReduceSum{})
+
+	item := []float64{1.0, 2.5, 5.3, 1, 7.8, 456}
+
+	for _, i := range item {
+		handler.ReduceNext(i)
+	}
+
+	result := handler.Result()
+
+	assert.Equal(t, 473.6, result, "Result should equal the sum of the items in the item array")
 }

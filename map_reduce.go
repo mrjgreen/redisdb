@@ -38,12 +38,12 @@ func NewReduceHandler(reduce ReduceFunc) ReduceFuncIterator{
 //
 type ReduceCount struct{}
 
-func (self *ReduceCount) Reduce(previous interface{}, current interface{}, count uint64) interface{}{
+func (self ReduceCount) Reduce(previous interface{}, current interface{}, count uint64) interface{}{
 
 	return nil;
 }
 
-func (self *ReduceCount) Result(previous interface{}, count uint64) interface{}{
+func (self ReduceCount) Result(previous interface{}, count uint64) interface{}{
 	return count
 }
 
