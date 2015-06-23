@@ -25,8 +25,9 @@ type SearchTimeRange struct {
 	End float64
 }
 
+
+// A list of data columns to group by
 type SearchGroupBy struct {
-	Enabled bool
 	Values []string
 }
 
@@ -34,6 +35,7 @@ type SearchValue struct {
 	Type string
 	Column string
 }
+
 type SearchValues map[string]SearchValue
 
 type SeriesSearch struct{
@@ -53,6 +55,7 @@ type SeriesStore interface{
 	Delete(series string, data SearchTimeRange)
 	Search(series string, data SeriesSearch) *Results
 	List(filter string) []Series
+	Info(series string) Series
 	Drop(series string) error
 }
 
