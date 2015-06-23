@@ -18,18 +18,16 @@ func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
 
 	series := r.PathParam("series")
 
-	data := &DataPoint{}
+	data := &SeriesData{}
 
 	err := r.DecodeJsonPayload(data)
-
-	//str, _ := json.Marshal(data)
 
 	if err != nil {
 		rest.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	self.Store.AddDataPoint(series, data)
+	self.Store.Insert(series, data)
 
 	w.WriteJson(data)
 }

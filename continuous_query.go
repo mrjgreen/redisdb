@@ -42,7 +42,9 @@ func (self *ContinuousQueryManager) Delete(target_series string){
 
 func (self *ContinuousQueryManager) Apply(query ContinuousQuery){
 
-	items := self.Store.ListSeries(query.SourceSeries)
+	items := self.Store.List(query.SourceSeries)
+
+	self.Log.Info(fmt.Sprintf("Found %d series to apply continuous query %s", len(items), query.SourceSeries))
 
 	for _, series := range items {
 
@@ -91,16 +93,14 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 		results := self.Store.Search(series, query.Query)
 
 		// Todo - apply in transaction
-		self.Store.Delete(targetSeries, SeriesSearch{
-			Between : SearchTimeRange{
-				Start : query.Query.Between.Start,
-				End : query.Query.Between.Start,
-			},
+		self.Store.Delete(targetSeries, SearchTimeRange{
+			Start : query.Query.Between.Start,
+			End : query.Query.Between.Start,
 		})
 
 		for _, point := range *results {
 
-			self.Store.AddDataPoint(targetSeries, &DataPoint{
+			self.Store.Insert(targetSeries, &SeriesData{
 				Values : point.Values,
 				Time : query.Query.Between.Start,
 			})
@@ -133,9 +133,9 @@ func (self *ContinuousQueryManager) Start(){
 	var duration,_ = time.ParseDuration(self.ComputeInterval);
 
 	for {
-		self.Log.Info("Checking continuous queries after " + self.ComputeInterval)
-
 		queries := self.List()
+
+		self.Log.Info(fmt.Sprintf("Checking %d continuous queries after %s", len(queries), self.ComputeInterval))
 
 		for _, query := range queries {
 			self.Apply(query)

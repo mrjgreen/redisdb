@@ -20,25 +20,25 @@ func (s *BenchMark) Start() error {
 
 	s.Log.Info("Running test inserts")
 
-	s.RetentionPolicyManager.Delete("events:raw:c:*")
-	s.RetentionPolicyManager.Add(RetentionPolicy{"events:raw:c:*", uint64(120)})
-
-	s.ContinuousQueryManager.Add(ContinuousQuery{
-		SourceSeries : "events:raw:c:*",
-		TargetSeries : "events:10m:c:*", // The glob pattern of source will be mapped onto the target
-		Granularity : "1m",
-		Query : SeriesSearch{
-			Values: SearchValues{
-				//"campaign" : SearchValue{Column:"campaign"},
-				"event" : SearchValue{Column:"event"},
-				"count" : SearchValue{Type:"COUNT"},
-				"value" : SearchValue{Type:"SUM", Column:"value"},
-			},
-			Group : SearchGroupBy{
-				Enabled : true,
-			},
-		},
-	})
+//	s.RetentionPolicyManager.Delete("events:raw:c:*")
+//	s.RetentionPolicyManager.Add(RetentionPolicy{"events:raw:c:*", uint64(120)})
+//
+//	s.ContinuousQueryManager.Add(ContinuousQuery{
+//		SourceSeries : "events:raw:c:*",
+//		TargetSeries : "events:10m:c:*", // The glob pattern of source will be mapped onto the target
+//		Granularity : "1m",
+//		Query : SeriesSearch{
+//			Values: SearchValues{
+//				//"campaign" : SearchValue{Column:"campaign"},
+//				"event" : SearchValue{Column:"event"},
+//				"count" : SearchValue{Type:"COUNT"},
+//				"value" : SearchValue{Type:"SUM", Column:"value"},
+//			},
+//			Group : SearchGroupBy{
+//				Enabled : true,
+//			},
+//		},
+//	})
 
 	var i = 0
 
@@ -55,13 +55,12 @@ func (s *BenchMark) Start() error {
 			campaignTag = "789"
 		}
 
-		point := NewDataPoint(DataValue{
+		point := NewSeriesData(DataValue{
 			"value" : strconv.Itoa(i),
 			"event" : strconv.Itoa(i % 5),
-			//"campaign" : campaignTag,
 		})
 
-		s.Store.AddDataPoint("events:raw:c:" + campaignTag, point)
+		s.Store.Insert("click:raw:c:" + campaignTag, point)
 
 		time.Sleep(1 * time.Millisecond)
 	}

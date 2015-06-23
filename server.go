@@ -89,7 +89,7 @@ func (s *Server) Start() error {
 
 	s.RetentionPolicyManager.Delete("click:raw:c:*")
 
-	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", uint64(20 * 60)})
+	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", float64(20 * 60)})
 
 	s.ContinuousQueryManager.Add(ContinuousQuery{
 		SourceSeries : "click:raw:c:*",
@@ -99,13 +99,11 @@ func (s *Server) Start() error {
 			Values: SearchValues{
 				"count" : SearchValue{Type:"COUNT"},
 			},
-			Group : SearchGroupBy{
-				Enabled : true,
-			},
+			Group : SearchGroupBy{Enabled: true},
 		},
 	})
 
-	//go s.BenchMark.Start()
+	go s.BenchMark.Start()
 
 	return nil
 }

@@ -18,12 +18,12 @@ type RetentionPolicyManager struct{
 
 type RetentionPolicy struct {
 	Name string
-	TimeSeconds uint64
+	TimeSeconds float64
 }
 
 func (self *RetentionPolicyManager) Add(policy RetentionPolicy){
 
-	timestr := strconv.FormatUint(policy.TimeSeconds, 10)
+	timestr := strconv.FormatFloat(policy.TimeSeconds, 'f', -1, 64)
 
 	self.Log.Info(fmt.Sprintf("Adding retention policy '%s' with retention %s seconds", policy.Name, timestr))
 
@@ -39,13 +39,13 @@ func (self *RetentionPolicyManager) Delete(name string){
 
 func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
-	items := self.Store.ListSeries(policy.Name)
+	items := self.Store.List(policy.Name)
 
 	for _, series := range items {
 
 		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %d seconds", policy.Name, series.Name, policy.TimeSeconds))
 
-		search := NewSearchOlderThan(policy.TimeSeconds)
+		search := NewRangeAfter(policy.TimeSeconds)
 
 		self.Store.Delete(series.Name, search)
 	}
@@ -59,11 +59,11 @@ func (self *RetentionPolicyManager) List() []RetentionPolicy {
 
 	for name, time := range items.Val(){
 
-		timeint,_ := strconv.ParseUint(time, 10, 64)
+		timeflt,_ := strconv.ParseFloat(time, 64)
 
 		policy := RetentionPolicy{
 			Name : name,
-			TimeSeconds : timeint,
+			TimeSeconds : timeflt,
 		}
 
 		policies = append(policies, policy)
