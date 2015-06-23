@@ -4,25 +4,25 @@ import ()
 
 type ReduceFuncIterator struct{
 	previousValue interface{}
-	index uint64
+	count uint64
 	handler ReduceFunc
 }
 
 type ReduceFunc interface{
-	Reduce(previous interface{}, current interface{}, index interface{}) interface{}
-	Result(previous interface{}) interface{}
+	Reduce(previous interface{}, current interface{}, count uint64) interface{}
+	Result(previous interface{}, count uint64) interface{}
 }
 
 
 func (self *ReduceFuncIterator) ReduceNext(item interface{}){
 
-	self.previousValue = self.handler.Reduce(self.previousValue, item, self.index)
+	self.count++
 
-	self.index++
+	self.previousValue = self.handler.Reduce(self.previousValue, item, self.count)
 }
 
 func (self *ReduceFuncIterator) Result() interface{}{
-	return self.handler.Result(self.previousValue)
+	return self.handler.Result(self.previousValue, self.count)
 }
 
 func NewReduceHandler(reduce ReduceFunc) ReduceFuncIterator{
@@ -38,17 +38,13 @@ func NewReduceHandler(reduce ReduceFunc) ReduceFuncIterator{
 //
 type ReduceCount struct{}
 
-func (self *ReduceCount) Reduce(previous interface{}, current interface{}, index interface{}) interface{}{
+func (self *ReduceCount) Reduce(previous interface{}, current interface{}, count uint64) interface{}{
 
-	if previous == nil{
-		previous = 0
-	}
-
-	return previous.(int) + 1;
+	return nil;
 }
 
-func (self *ReduceCount) Result(previous interface{}) interface{}{
-	return previous.(int)
+func (self *ReduceCount) Result(previous interface{}, count uint64) interface{}{
+	return count
 }
 
 //
@@ -58,7 +54,7 @@ type ReduceCountDistinct struct{}
 
 type distinctMap map[interface{}]bool
 
-func (self ReduceCountDistinct) Reduce(previous interface{}, current interface{}, index interface{}) interface{}{
+func (self ReduceCountDistinct) Reduce(previous interface{}, current interface{}, count uint64) interface{}{
 
 	if previous == nil{
 		previous = make(distinctMap)
@@ -69,38 +65,46 @@ func (self ReduceCountDistinct) Reduce(previous interface{}, current interface{}
 	return previous
 }
 
-func (self ReduceCountDistinct) Result(previous interface{}) interface{}{
+func (self ReduceCountDistinct) Result(previous interface{}, count uint64) interface{}{
 	return len(previous.(distinctMap))
 }
 
 
 //
-// Counts the distinct items in a stream
+// Calculates the mean average of a value in a stream
 //
 type ReduceMeanAvg struct{}
 
-type meanAvgHolder struct {
-	count uint64
-	value float64
-}
+func (self ReduceMeanAvg) Reduce(previous interface{}, current interface{}, count uint64) interface{}{
 
-func (self ReduceMeanAvg) Reduce(previous interface{}, current interface{}, index interface{}) interface{}{
-
-	if previous == nil {
-		previous = meanAvgHolder{}
+	if previous == nil{
+		previous = float64(0)
 	}
 
-	m := previous.(meanAvgHolder)
-
-	m.value += current.(float64)
-	m.count++
-
-	return m
+	return previous.(float64) + current.(float64)
 }
 
-func (self ReduceMeanAvg) Result(previous interface{}) interface{}{
+func (self ReduceMeanAvg) Result(previous interface{}, count uint64) interface{}{
 
-	t := previous.(meanAvgHolder)
+	return previous.(float64) / float64(count)
+}
 
-	return t.value / float64(t.count)
+
+//
+// Calculates the sum of a value in a stream
+//
+type ReduceSum struct{}
+
+func (self ReduceSum) Reduce(previous interface{}, current interface{}, count uint64) interface{}{
+
+	if previous == nil{
+		previous = float64(0)
+	}
+
+	return previous.(float64) + current.(float64)
+}
+
+func (self ReduceSum) Result(previous interface{}, count uint64) interface{}{
+
+	return previous.(float64)
 }

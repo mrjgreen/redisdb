@@ -17,7 +17,7 @@ func TestCountReduce(t *testing.T) {
 
 	result := handler.Result()
 
-	assert.Equal(t, len(item), result, "Result should equal the size of the item array")
+	assert.Equal(t, uint64(len(item)), result, "Result should equal the size of the item array")
 }
 
 func TestCountDistinctReduce(t *testing.T) {
