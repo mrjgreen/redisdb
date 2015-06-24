@@ -87,22 +87,6 @@ func (s *Server) Start() error {
 
 	s.Log.Info("Started server")
 
-	s.RetentionPolicyManager.Delete("click:raw:c:*")
-
-	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", float64(20 * 60)})
-
-	s.ContinuousQueryManager.Add(ContinuousQuery{
-		SourceSeries : "click:raw:c:*",
-		TargetSeries : "click:10m:c:*", // The glob pattern of source will be mapped onto the target
-		Granularity : "10m",
-		Query : SeriesSearch{
-			Values: SearchValues{
-				"count" : SearchValue{Type:"COUNT"},
-			},
-			Group : SearchGroupBy{Enabled: true},
-		},
-	})
-
 	go s.BenchMark.Start()
 
 	return nil

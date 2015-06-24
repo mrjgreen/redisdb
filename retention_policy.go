@@ -43,9 +43,9 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
 	for _, series := range items {
 
-		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %d seconds", policy.Name, series.Name, policy.TimeSeconds))
+		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %f seconds", policy.Name, series.Name, policy.TimeSeconds))
 
-		search := NewRangeAfter(policy.TimeSeconds)
+		search := NewRangeBefore(policy.TimeSeconds)
 
 		self.Store.Delete(series.Name, search)
 	}

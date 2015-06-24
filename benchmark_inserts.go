@@ -20,22 +20,35 @@ func (s *BenchMark) Start() error {
 
 	s.Log.Info("Running test inserts")
 
-//	s.RetentionPolicyManager.Delete("events:raw:c:*")
-//	s.RetentionPolicyManager.Add(RetentionPolicy{"events:raw:c:*", uint64(120)})
-//
+	s.RetentionPolicyManager.Delete("click:raw:c:*")
+
+	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", float64(2 * 60)})
+
+	s.ContinuousQueryManager.Add(ContinuousQuery{
+		SourceSeries : "click:raw:c:*",
+		TargetSeries : "click:1m:c:*", // The glob pattern of source will be mapped onto the target
+		Granularity : "1m",
+		Query : SeriesSearch{
+			Values: SearchValues{
+				"count" : SearchValue{Type:"COUNT"},
+				"event" : SearchValue{Column : "event"},
+			},
+			Group : SearchGroupBy{Enabled: true, Columns : []string{"event"},},
+		},
+	})
+
 //	s.ContinuousQueryManager.Add(ContinuousQuery{
-//		SourceSeries : "events:raw:c:*",
-//		TargetSeries : "events:10m:c:*", // The glob pattern of source will be mapped onto the target
-//		Granularity : "1m",
+//		SourceSeries : "click:raw:c:*",
+//		TargetSeries : "click:event:10m:c:*", // The glob pattern of source will be mapped onto the target
+//		Granularity : "10m",
 //		Query : SeriesSearch{
 //			Values: SearchValues{
-//				//"campaign" : SearchValue{Column:"campaign"},
-//				"event" : SearchValue{Column:"event"},
 //				"count" : SearchValue{Type:"COUNT"},
-//				"value" : SearchValue{Type:"SUM", Column:"value"},
+//				"avg_value" : SearchValue{Type:"AVG", Column: "value"},
 //			},
 //			Group : SearchGroupBy{
-//				Enabled : true,
+//				Enabled: true,
+//				Columns : []string{"event"},
 //			},
 //		},
 //	})
@@ -45,15 +58,17 @@ func (s *BenchMark) Start() error {
 	for {
 
 		i++
-		var campaignTag string
+		campaignTag := "12345"
 
-		if i % 4 == 0 {
-			campaignTag = "123"
-		}else if i % 7 == 0 {
-			campaignTag = "456"
-		}else {
-			campaignTag = "789"
-		}
+//		var campaignTag string
+//
+//		if i % 4 == 0 {
+//			campaignTag = "123"
+//		}else if i % 7 == 0 {
+//			campaignTag = "456"
+//		}else {
+//			campaignTag = "789"
+//		}
 
 		point := NewSeriesData(DataValue{
 			"value" : strconv.Itoa(i),
@@ -62,7 +77,7 @@ func (s *BenchMark) Start() error {
 
 		s.Store.Insert("click:raw:c:" + campaignTag, point)
 
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Nanosecond)
 	}
 
 	return  nil

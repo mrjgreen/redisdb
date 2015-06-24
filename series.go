@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 	"./reduce"
+	"encoding/json"
 )
 
 // Data values are a string key representing the item name
@@ -37,7 +38,7 @@ type SearchTimeRange struct {
 // A list of data columns to group by
 type SearchGroupBy struct {
 	Enabled bool
-	Values []string
+	Columns []string
 }
 
 // A list of the result column criteria
@@ -75,12 +76,6 @@ type resultBucket struct{
 	items map[string]*reduce.ReduceFuncIterator
 }
 
-func (self *resultBucket) exists(key string) bool{
-	_, ok := self.items[key]
-
-	return ok
-}
-
 type UngroupedResultSet struct {
 	results Results
 }
@@ -97,8 +92,25 @@ func (self *UngroupedResultSet) Get() *Results{
 // A special case of group by where there is only one bucket
 type GroupAllResultSet struct {
 	Values SearchValues
-	bucket *resultBucket
+	bucket resultBucket
 	time float64
+}
+
+func getColumnEvaluator(col_type string) *reduce.ReduceFuncIterator{
+	var handler reduce.ReduceFunc
+
+	switch col_type{
+	case "COUNT" :
+		handler = reduce.ReduceCount{}
+	case "SUM" :
+		handler = reduce.ReduceSum{}
+	case "AVG" :
+		handler = reduce.ReduceMeanAvg{}
+	default :
+		handler = reduce.ReduceLastItem{}
+	}
+
+	return reduce.NewReduceHandler(handler)
 }
 
 func (self *GroupAllResultSet) Add(record SeriesData){
@@ -107,22 +119,9 @@ func (self *GroupAllResultSet) Add(record SeriesData){
 
 	for target, source := range self.Values {
 
-		if !self.bucket.exists(target) {
+		if _,ok := self.bucket.items[target]; !ok {
 
-			var handler reduce.ReduceFunc
-
-			switch source.Type{
-			case "COUNT" :
-				handler = reduce.ReduceCount{}
-			case "SUM" :
-				handler = reduce.ReduceSum{}
-			case "AVG" :
-				handler = reduce.ReduceMeanAvg{}
-			default :
-				handler = reduce.ReduceLastItem{}
-			}
-
-			self.bucket.items[target] = reduce.NewReduceHandler(handler)
+			self.bucket.items[target] = getColumnEvaluator(source.Type)
 		}
 
 		self.bucket.items[target].ReduceNext(record.Values[source.Column])
@@ -131,35 +130,85 @@ func (self *GroupAllResultSet) Add(record SeriesData){
 
 func (self *GroupAllResultSet) Get() *Results{
 
-	var items = make(Results, 0)
+	var values = make(DataValue)
 
 	for name, item := range self.bucket.items{
-		items = append(items, SeriesData{Values: DataValue{name: item.Result()}, Time: self.time})
+		values[name] = item.Result()
 	}
 
-	return &items
+	return &Results{SeriesData{Values: values, Time: self.time}}
 }
 
 // A group by with a result bucket for each group by
 type GroupByColumnResultSet struct {
 	Values SearchValues
 	cols []string
-	buckets *map[string]resultBucket
+	buckets map[string]resultBucket
 	time float64
 }
 
-func (self *GroupByColumnResultSet) Add(data SeriesData){
+func encodeStruct(group []string) string{
+	groupbyte, _ := json.Marshal(group)
 
+	return string(groupbyte)
+}
+
+func (self *GroupByColumnResultSet) Add(record SeriesData){
+	// TODO - move this into bucket
+	self.time = record.Time
+
+	var group = make([]string, 0)
+
+	for _, col := range self.cols {
+		group = append(group, col, record.Values[col].(string))
+	}
+
+	groupstr := encodeStruct(group)
+
+	if _, ok := self.buckets[groupstr]; !ok {
+		self.buckets[groupstr] = NewResultBucket()
+	}
+
+	for target, source := range self.Values {
+
+		if _,ok := self.buckets[groupstr].items[target]; !ok {
+
+			self.buckets[groupstr].items[target] = getColumnEvaluator(source.Type)
+		}
+
+		self.buckets[groupstr].items[target].ReduceNext(record.Values[source.Column])
+	}
 }
 
 func (self *GroupByColumnResultSet) Get() *Results{
-	return nil
+
+	var results = make(Results, len(self.buckets))
+
+	var i = 0
+
+	for _, bucket := range self.buckets{
+		var values = make(DataValue)
+
+		for name, item := range bucket.items{
+			values[name] = item.Result()
+		}
+
+		results[i] = SeriesData{Values: values, Time: self.time}
+
+		i++
+	}
+
+	return &results
 }
 
-func NewResultBucket() * resultBucket{
-	return &resultBucket{
+func NewResultBucket() resultBucket{
+	return resultBucket{
 		items: make(map[string]*reduce.ReduceFuncIterator, 0),
 	}
+}
+
+func NewResultBucketSet() map[string]resultBucket{
+	return make(map[string]resultBucket)
 }
 
 func getResultSetHandler(search SeriesSearch) ResultSet{
@@ -168,11 +217,11 @@ func getResultSetHandler(search SeriesSearch) ResultSet{
 		return &UngroupedResultSet{}
 	}
 
-	if search.Group.Values == nil{
+	if search.Group.Columns == nil{
 		return &GroupAllResultSet{Values:search.Values, bucket: NewResultBucket()}
 	}
 
-	return &GroupByColumnResultSet{cols:search.Group.Values, Values:search.Values}
+	return &GroupByColumnResultSet{cols:search.Group.Columns, Values:search.Values, buckets: NewResultBucketSet()}
 }
 
 ///////////////////////////

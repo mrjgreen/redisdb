@@ -8,7 +8,6 @@ import (
 	redis "gopkg.in/redis.v3"
 	"./simpleflake"
 	"./glob"
-	//"encoding/gob"
 )
 
 type RedisSeriesStore struct{
