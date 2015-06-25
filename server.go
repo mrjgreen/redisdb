@@ -96,7 +96,7 @@ func (s *Server) Start() error {
 
 	s.Log.Info("Started server")
 
-	//go s.BenchMark.Start()
+	go s.BenchMark.Start()
 
 	return nil
 }

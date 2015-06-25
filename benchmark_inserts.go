@@ -2,7 +2,7 @@ package main
 
 import (
 	log "gopkg.in/inconshreveable/log15.v2"
-	"strconv"
+	//"strconv"
 	"time"
 )
 
@@ -72,8 +72,8 @@ func (s *BenchMark) Start() error {
 //		}
 
 		point := NewSeriesData(DataValue{
-			"value" : strconv.Itoa(i),
-			"event" : strconv.Itoa(i % 5),
+			"value" : i,
+			"event" : i % 5,
 		})
 
 		s.Store.Insert("click:raw:c:" + campaignTag, point)
