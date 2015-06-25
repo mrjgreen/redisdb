@@ -7,7 +7,6 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	"./glob"
-	"encoding/json"
 )
 
 type MongoSeriesStore struct{
@@ -29,15 +28,16 @@ func createPipeline(search SeriesSearch) []bson.M{
 		"time" : bson.M{"$min" : "$time"},
 	}
 
-	// Add the columns to aggregate
-	for k, v := range search.Values{
-		group[k] = v
-	}
-
 	// Project the group by _id onto standard return values - again time is always projected
 	project := bson.M{
 		"_id" : 0,
 		"time" : "$time",
+	}
+
+	// Add the columns to aggregate, and project them
+	for k, v := range search.Values{
+		group[k] = v
+		project[k] = "$" + k
 	}
 
 	// Add in the id fields
@@ -49,8 +49,8 @@ func createPipeline(search SeriesSearch) []bson.M{
 		{
 			"$match" : bson.M{
 				"time": bson.M{
-					"$gt": search.Between.Start,
-					"$lt": search.Between.End,
+					"$gte": search.Between.Start,
+					"$lte": search.Between.End,
 				},
 			},
 		},
@@ -82,8 +82,8 @@ func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Result
 
 		err = self.Conn.C(series).Find(bson.M{
 			"time": bson.M{
-				"$gt": search.Between.Start,
-				"$lt": search.Between.End,
+				"$gte": search.Between.Start,
+				"$lte": search.Between.End,
 			},
 		}).All(&results)
 	}
@@ -101,8 +101,8 @@ func (self *MongoSeriesStore) Delete(series string, between SearchTimeRange){
 
 	self.Conn.C(series).RemoveAll(bson.M{
 		"time": bson.M{
-			"$gt": between.Start,
-			"$lt": between.End,
+			"$gte": between.Start,
+			"$lte": between.End,
 		},
 	})
 }
@@ -124,10 +124,6 @@ func (self *MongoSeriesStore) Insert(series string, data DataValue) error{
 	if _, ok := mdata["time"]; !ok{
 		mdata["time"] = time.Now()
 	}
-
-	j, _ := json.Marshal(mdata)
-
-	log.Debug(string(j))
 
 	err := self.Conn.C(series).Insert(mdata)
 
