@@ -22,7 +22,7 @@ func (s *BenchMark) Start() error {
 
 	s.RetentionPolicyManager.Delete("click:raw:c:*")
 
-	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", float64(2 * 60)})
+	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", time.Duration(120 * time.Second)})
 
 	s.ContinuousQueryManager.Add(ContinuousQuery{
 		SourceSeries : "click:raw:c:*",
@@ -78,7 +78,7 @@ func (s *BenchMark) Start() error {
 
 		s.Store.Insert("click:raw:c:" + campaignTag, point)
 
-		time.Sleep(10000 * time.Nanosecond)
+		time.Sleep(100 * time.Nanosecond)
 	}
 
 	return  nil

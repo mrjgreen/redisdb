@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 	"fmt"
-	"strconv"
+	//"strconv"
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
 )
@@ -18,16 +18,14 @@ type RetentionPolicyManager struct{
 
 type RetentionPolicy struct {
 	Name string
-	TimeSeconds float64
+	TimeSeconds time.Duration
 }
 
 func (self *RetentionPolicyManager) Add(policy RetentionPolicy){
 
-	timestr := strconv.FormatFloat(policy.TimeSeconds, 'f', -1, 64)
+	self.Log.Info(fmt.Sprintf("Adding retention policy '%s' with retention %s seconds", policy.Name, policy.TimeSeconds))
 
-	self.Log.Info(fmt.Sprintf("Adding retention policy '%s' with retention %s seconds", policy.Name, timestr))
-
-	self.Conn.HSet(self.Prefix + "config:retention", policy.Name, timestr)
+	self.Conn.HSet(self.Prefix + "config:retention", policy.Name, string(policy.TimeSeconds))
 }
 
 func (self *RetentionPolicyManager) Delete(name string){
@@ -43,7 +41,7 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
 	for _, series := range items {
 
-		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %f seconds", policy.Name, series.Name, policy.TimeSeconds))
+		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %s", policy.Name, series.Name, policy.TimeSeconds))
 
 		search := NewRangeBefore(policy.TimeSeconds)
 
@@ -57,9 +55,9 @@ func (self *RetentionPolicyManager) List() []RetentionPolicy {
 
 	var policies = make([]RetentionPolicy, 0)
 
-	for name, time := range items.Val(){
+	for name, t := range items.Val(){
 
-		timeflt,_ := strconv.ParseFloat(time, 64)
+		timeflt,_ := time.ParseDuration(t)
 
 		policy := RetentionPolicy{
 			Name : name,

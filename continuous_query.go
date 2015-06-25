@@ -86,8 +86,8 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 			startTime = startTime.Add(-interval)
 		}
 
-		query.Query.Between.End = float64(startTime.Add(interval).UnixNano())/1e9
-		query.Query.Between.Start = float64(startTime.UnixNano())/1e9
+		query.Query.Between.End = startTime.Add(interval)
+		query.Query.Between.Start = startTime
 
 		// Perform search and group by
 		results := self.Store.Search(series, query.Query)

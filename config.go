@@ -12,6 +12,10 @@ type RedisConfig struct {
 	Database	int64  `toml:"database"`
 }
 
+type MongoConfig struct {
+	Host 		string	`toml:"host"`
+}
+
 type HTTPConfig struct {
 	Enabled		bool	`toml:"enabled"`
 	Port 		string	`toml:"port"`
@@ -34,6 +38,7 @@ type LogConfig struct {
 }
 
 type Config struct {
+	Mongo      	*MongoConfig       	`toml:"mongo"`
 	Redis      	*RedisConfig       	`toml:"redis"`
 	Log       	*LogConfig       	`toml:"log"`
 	Retention  	*RetentionConfig   	`toml:"retention"`
@@ -45,6 +50,9 @@ type Config struct {
 func NewConfig() *Config {
 
 	c := &Config{
+		Mongo : &MongoConfig{
+			Host : "localhost",
+		},
 		Redis : &RedisConfig{
 			Host : "localhost:6379",
 			KeyPrefix : "reduxdb:",

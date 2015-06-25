@@ -3,6 +3,7 @@ package main
 import (
 	log "gopkg.in/inconshreveable/log15.v2"
 	redis "gopkg.in/redis.v3"
+	"gopkg.in/mgo.v2"
 )
 
 // Server represents a container for the metadata and storage data and services.
@@ -26,15 +27,23 @@ func NewServer(c *Config) (*Server, error) {
 		DB:       c.Redis.Database,
 	})
 
+	mgoSession, err := mgo.Dial(c.Mongo.Host)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// Optional. Switch the session to a monotonic behavior.
+	mgoSession.SetMode(mgo.Monotonic, true)
+
 	log, err := NewLogger(c.Log)
 
 	if err != nil {
 		return nil, err
 	}
 
-	store := &RedisSeriesStore{
-		Conn : client,
-		Prefix : c.Redis.KeyPrefix,
+	store := &MongoSeriesStore{
+		Conn : mgoSession.DB("test"),
 		Log: log,
 	}
 
@@ -87,7 +96,7 @@ func (s *Server) Start() error {
 
 	s.Log.Info("Started server")
 
-	go s.BenchMark.Start()
+	//go s.BenchMark.Start()
 
 	return nil
 }
