@@ -4,6 +4,16 @@ import (
 	"time"
 )
 
+type SeriesStore interface{
+	Insert(series string, data *SeriesData) error
+	Delete(series string, data SearchTimeRange)
+	Search(series string, data SeriesSearch) *Results
+	List(filter string) []Series
+	Drop(series string) error
+	//Info(series string) Series
+}
+
+
 // Data values are a string key representing the item name
 // along with a the value which should be scalar int or float, string
 // it is possible to store complex types, which can be serialized as JSON.
@@ -69,15 +79,6 @@ type Results []SeriesData
 ///////////////////////////
 type Series struct {
 	Name string
-}
-
-type SeriesStore interface{
-	Insert(series string, data *SeriesData) error
-	Delete(series string, data SearchTimeRange)
-	Search(series string, data SeriesSearch) *Results
-	List(filter string) []Series
-	//Info(series string) Series
-	Drop(series string) error
 }
 
 ///////////////////////////
