@@ -26,6 +26,33 @@ func checkBetweenRange(time_range SearchTimeRange) SearchTimeRange{
 	return time_range
 }
 
+func createPipeline(search SeriesSearch) []bson.M{
+
+	group := bson.M{
+		"_id": search.Group.Columns,
+	}
+
+	for k, v := range search.Group.Columns{
+		group[k] = v
+	}
+
+	pipeline := []bson.M{
+		{
+			"$match" : bson.M{
+				"time": bson.M{
+					"$gt": between.Start,
+					"$lt": between.End,
+				},
+			},
+		},
+		{
+			"$group" : group,
+		},
+	}
+
+	return pipeline
+}
+
 func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Results{
 
 	var results Results
@@ -34,27 +61,7 @@ func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Result
 
 	if(search.Group.Enabled){
 
-		group := bson.M{
-			"_id": search.Group.Columns,
-		}
-
-		for k, v := range search.Group.Columns{
-			group[k] = v
-		}
-
-		pipeline := []bson.M{
-			{
-				"$match" : bson.M{
-					"time": bson.M{
-						"$gt": between.Start,
-						"$lt": between.End,
-					},
-				},
-			},
-			{
-				"$group" : group,
-			},
-		}
+		pipeline := createPipeline(search)
 
 		self.Conn.C(series).Pipe(pipeline).All(&results)
 	}else{
