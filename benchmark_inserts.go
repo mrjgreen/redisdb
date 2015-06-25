@@ -37,21 +37,22 @@ func (s *BenchMark) Start() error {
 		},
 	})
 
-//	s.ContinuousQueryManager.Add(ContinuousQuery{
-//		SourceSeries : "click:raw:c:*",
-//		TargetSeries : "click:event:10m:c:*", // The glob pattern of source will be mapped onto the target
-//		Granularity : "10m",
-//		Query : SeriesSearch{
-//			Values: SearchValues{
-//				"count" : SearchValue{Type:"COUNT"},
-//				"avg_value" : SearchValue{Type:"AVG", Column: "value"},
-//			},
-//			Group : SearchGroupBy{
-//				Enabled: true,
-//				Columns : []string{"event"},
-//			},
-//		},
-//	})
+	s.ContinuousQueryManager.Add(ContinuousQuery{
+		SourceSeries : "click:raw:c:*",
+		TargetSeries : "click:event:10m:c:*", // The glob pattern of source will be mapped onto the target
+		Granularity : "10m",
+		Query : SeriesSearch{
+			Values: SearchValues{
+				"count" : SearchValue{Type:"COUNT"},
+				"avg_value" : SearchValue{Type:"AVG", Column: "value"},
+				"sum_value" : SearchValue{Type:"SUM", Column: "value"},
+			},
+			Group : SearchGroupBy{
+				Enabled: true,
+				Columns : []string{"event"},
+			},
+		},
+	})
 
 	var i = 0
 
@@ -77,7 +78,7 @@ func (s *BenchMark) Start() error {
 
 		s.Store.Insert("click:raw:c:" + campaignTag, point)
 
-		time.Sleep(10 * time.Nanosecond)
+		time.Sleep(10000 * time.Nanosecond)
 	}
 
 	return  nil

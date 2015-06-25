@@ -1,5 +1,9 @@
 package reduce
 
+import(
+	"strconv"
+)
+
 type ReduceFuncIterator struct{
 	previousValue interface{}
 	count uint64
@@ -91,7 +95,7 @@ func (self ReduceMeanAvg) Reduce(previous interface{}, current interface{}, coun
 		previous = float64(0)
 	}
 
-	return previous.(float64) + current.(float64)
+	return previous.(float64) + getNumber(current)
 }
 
 func (self ReduceMeanAvg) Result(previous interface{}, count uint64) interface{}{
@@ -111,10 +115,23 @@ func (self ReduceSum) Reduce(previous interface{}, current interface{}, count ui
 		previous = float64(0)
 	}
 
-	return previous.(float64) + current.(float64)
+	return previous.(float64) + getNumber(current)
 }
 
 func (self ReduceSum) Result(previous interface{}, count uint64) interface{}{
 
 	return previous.(float64)
+}
+
+
+
+/// Take an interface and try to parse a float from it
+func getNumber(value interface{}) float64{
+	val, err := strconv.ParseFloat(value.(string), 64)
+
+	if err != nil{
+		return float64(0)
+	}
+
+	return val
 }
