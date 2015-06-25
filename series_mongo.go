@@ -22,6 +22,7 @@ func createPipeline(search SeriesSearch) []bson.M{
 
 	group := bson.M{
 		"_id": search.Group.Columns,
+		"time" : bson.M{"$min" : "$time"},
 	}
 
 	for k, v := range search.Values{

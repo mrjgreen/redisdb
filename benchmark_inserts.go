@@ -43,12 +43,12 @@ func (s *BenchMark) Start() error {
 		Query : SeriesSearch{
 			Values: SearchValues{
 				"count" : SearchValue{"$sum":1},
-				"avg_value" : SearchValue{"$avg":"$values.value"},
-				"sum_value" : SearchValue{"$sum":"$values.value"},
+				"avg_value" : SearchValue{"$avg":"$value"},
+				"sum_value" : SearchValue{"$sum":"$value"},
 			},
 			Group : SearchGroupBy{
 				Enabled: true,
-				Columns : GroupColumn{"event" : "$values.event"},
+				Columns : GroupColumn{"values.event" : "$values.event"},
 			},
 		},
 	})
