@@ -5,7 +5,7 @@ import (
 )
 
 type SeriesStore interface{
-	Insert(series string, data *SeriesData) error
+	Insert(series string, data DataValue) error
 	Delete(series string, data SearchTimeRange)
 	Search(series string, data SeriesSearch) *Results
 	List(filter string) []Series
@@ -20,12 +20,12 @@ type SeriesStore interface{
 // Aggregate functions like SUM/AVG will only work on numeric types
 type DataValue map[string]interface {}
 
-// This type is passed into the storage interface when inserting data. The Time field
-// should be a unix timestamp and may use decimals to represent fractions of seconds
-type SeriesData struct{
-	Values DataValue
-	Time time.Time
-}
+//// This type is passed into the storage interface when inserting data. The Time field
+//// should be a unix timestamp and may use decimals to represent fractions of seconds
+//type SeriesData struct{
+//	Values DataValue
+//	Time time.Time
+//}
 
 
 
@@ -69,7 +69,7 @@ type SeriesSearch struct{
 //
 ///////////////////////////
 
-type Results []SeriesData
+type Results []DataValue
 
 
 ///////////////////////////
@@ -87,19 +87,19 @@ type Series struct {
 //
 ///////////////////////////
 
-// Create a new series data item using the current time as the timestamp
-func NewSeriesData(values DataValue) *SeriesData{
-	return &SeriesData{
-		Values : values,
-		Time : timeNow(),
-	}
-}
+//// Create a new series data item using the current time as the timestamp
+//func NewSeriesData(values DataValue) *SeriesData{
+//	return &SeriesData{
+//		Values : values,
+//		Time : time.Now(),
+//	}
+//}
 
 // Create a SearchTimeRange which will return all records older than (and including)
 // the given age in seconds with decimal fractions
 func NewRangeFull() SearchTimeRange{
 	return SearchTimeRange{
-		End : timeNow(),
+		End : time.Now(),
 	}
 }
 
@@ -107,7 +107,7 @@ func NewRangeFull() SearchTimeRange{
 // the given age in seconds with decimal fractions
 func NewRangeBefore(age_seconds time.Duration) SearchTimeRange{
 	return SearchTimeRange{
-		End : timeNow().Add(-age_seconds),
+		End : time.Now().Add(-age_seconds),
 	}
 }
 
@@ -115,12 +115,7 @@ func NewRangeBefore(age_seconds time.Duration) SearchTimeRange{
 // the given age in seconds with decimal fractions
 func NewRangeAfter(age_seconds time.Duration) SearchTimeRange{
 	return SearchTimeRange{
-		Start : timeNow().Add(-age_seconds),
-		End : timeNow(),
+		Start : time.Now().Add(-age_seconds),
+		End : time.Now(),
 	}
-}
-
-// A helper function to create the current timestamp in seconds with decimal nano seconds
-func timeNow() time.Time{
-	return time.Now()
 }

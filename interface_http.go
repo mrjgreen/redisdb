@@ -18,9 +18,9 @@ func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
 
 	series := r.PathParam("series")
 
-	data := &SeriesData{}
+	data := DataValue{}
 
-	err := r.DecodeJsonPayload(data)
+	err := r.DecodeJsonPayload(&data)
 
 	if err != nil {
 		rest.Error(w, err.Error(), http.StatusInternalServerError)

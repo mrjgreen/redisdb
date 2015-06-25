@@ -18,6 +18,19 @@ type Server struct {
 	BenchMark *BenchMark
 }
 
+func NewMongo(c *Config) (*mgo.Session){
+	mgoSession, err := mgo.Dial(c.Mongo.Host)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// Optional. Switch the session to a monotonic behavior.
+	mgoSession.SetMode(mgo.Monotonic, true)
+
+	return mgoSession
+}
+
 // NewServer returns a new instance of Server built from a config.
 func NewServer(c *Config) (*Server, error) {
 
@@ -27,14 +40,7 @@ func NewServer(c *Config) (*Server, error) {
 		DB:       c.Redis.Database,
 	})
 
-	mgoSession, err := mgo.Dial(c.Mongo.Host)
-
-	if err != nil {
-		panic(err)
-	}
-
-	// Optional. Switch the session to a monotonic behavior.
-	mgoSession.SetMode(mgo.Monotonic, true)
+	mgoSession := NewMongo(c)
 
 	log, err := NewLogger(c.Log)
 

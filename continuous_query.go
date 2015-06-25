@@ -86,7 +86,7 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 			startTime = startTime.Add(-interval)
 		}
 
-		query.Query.Between.End = startTime.Add(interval)
+		query.Query.Between.End = startTime.Add(interval).Add(- time.Nanosecond)
 		query.Query.Between.Start = startTime
 
 		// Perform search and group by
@@ -95,15 +95,14 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 		// Todo - apply in transaction
 		self.Store.Delete(targetSeries, SearchTimeRange{
 			Start : query.Query.Between.Start,
-			End : query.Query.Between.Start,
+			End : query.Query.Between.End,
 		})
 
 		for _, point := range *results {
 
-			self.Store.Insert(targetSeries, &SeriesData{
-				Values : point.Values,
-				Time : query.Query.Between.Start,
-			})
+			point["time"] = query.Query.Between.Start
+
+			self.Store.Insert(targetSeries, point)
 		}
 
 		self.Log.Info(fmt.Sprintf("Written %d rows for continuous query '%s'", len(*results), targetSeries))

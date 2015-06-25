@@ -48,7 +48,7 @@ func (s *BenchMark) Start() error {
 			},
 			Group : SearchGroupBy{
 				Enabled: true,
-				Columns : GroupColumn{"values.event" : "$values.event"},
+				Columns : GroupColumn{"event" : "$event"},
 			},
 		},
 	})
@@ -60,20 +60,10 @@ func (s *BenchMark) Start() error {
 		i++
 		campaignTag := "12345"
 
-//		var campaignTag string
-//
-//		if i % 4 == 0 {
-//			campaignTag = "123"
-//		}else if i % 7 == 0 {
-//			campaignTag = "456"
-//		}else {
-//			campaignTag = "789"
-//		}
-
-		point := NewSeriesData(DataValue{
+		point := DataValue{
 			"value" : i,
 			"event" : i % 5,
-		})
+		}
 
 		s.Store.Insert("click:raw:c:" + campaignTag, point)
 

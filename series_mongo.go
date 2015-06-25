@@ -7,6 +7,7 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	"./glob"
+	"encoding/json"
 )
 
 type MongoSeriesStore struct{
@@ -20,13 +21,28 @@ func seriesLog(action string, series string, start time.Time, end time.Time){
 
 func createPipeline(search SeriesSearch) []bson.M{
 
+	// Build the group by statement
 	group := bson.M{
 		"_id": search.Group.Columns,
+
+		// We always return time - choose the minimum from the group
 		"time" : bson.M{"$min" : "$time"},
 	}
 
+	// Add the columns to aggregate
 	for k, v := range search.Values{
 		group[k] = v
+	}
+
+	// Project the group by _id onto standard return values - again time is always projected
+	project := bson.M{
+		"_id" : 0,
+		"time" : "$time",
+	}
+
+	// Add in the id fields
+	for k, _ := range search.Group.Columns{
+		project[k] = "$_id." + k
 	}
 
 	pipeline := []bson.M{
@@ -40,6 +56,9 @@ func createPipeline(search SeriesSearch) []bson.M{
 		},
 		{
 			"$group" : group,
+		},
+		{
+			"$project" :project,
 		},
 	}
 
@@ -89,15 +108,28 @@ func (self *MongoSeriesStore) Delete(series string, between SearchTimeRange){
 }
 
 
-func (self *MongoSeriesStore) Insert(series string, data *SeriesData) error{
+func (self *MongoSeriesStore) Insert(series string, data DataValue) error{
 
-	if data.Values == nil{
+	if len(data) == 0{
 		return fmt.Errorf("Attempted to insert empty value set into series: " + series)
 	}
 
-	data.Time = timeNow()
+	// TODO - this is messy!
+	var mdata = make(map[string]interface{})
 
-	err := self.Conn.C(series).Insert(data)
+	for k, v := range data{
+		mdata[k] = v
+	}
+
+	if _, ok := mdata["time"]; !ok{
+		mdata["time"] = time.Now()
+	}
+
+	j, _ := json.Marshal(mdata)
+
+	log.Debug(string(j))
+
+	err := self.Conn.C(series).Insert(mdata)
 
 	if err != nil{
 		panic(err)
