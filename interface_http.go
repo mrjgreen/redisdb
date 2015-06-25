@@ -36,7 +36,9 @@ func (self *HttpInterface) ReadCommand(w rest.ResponseWriter, r *rest.Request){
 
 	series := r.PathParam("series")
 
-	search := SeriesSearch{}
+	search := SeriesSearch{
+		Between : NewRangeFull(),
+	}
 //
 //	err := r.DecodeJsonPayload(&search)
 //

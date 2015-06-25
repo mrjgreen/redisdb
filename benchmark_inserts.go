@@ -30,8 +30,7 @@ func (s *BenchMark) Start() error {
 		Granularity : "1m",
 		Query : SeriesSearch{
 			Values: SearchValues{
-				"count" : SearchValue{Type:"COUNT"},
-				"event" : SearchValue{Column : "event"},
+				"count" : SearchValue{"$sum":1},
 			},
 			Group : SearchGroupBy{Enabled: true,},
 		},
@@ -43,11 +42,14 @@ func (s *BenchMark) Start() error {
 		Granularity : "10m",
 		Query : SeriesSearch{
 			Values: SearchValues{
-				"count" : SearchValue{Type:"COUNT"},
-				"avg_value" : SearchValue{Type:"AVG", Column: "value"},
-				"sum_value" : SearchValue{Type:"SUM", Column: "value"},
+				"count" : SearchValue{"$sum":1},
+				"avg_value" : SearchValue{"$avg":"$values.value"},
+				"sum_value" : SearchValue{"$sum":"$values.value"},
 			},
-			Group : SearchGroupBy{Enabled: true, Columns : GroupColumn{"event" : "$event"},},
+			Group : SearchGroupBy{
+				Enabled: true,
+				Columns : GroupColumn{"event" : "$values.event"},
+			},
 		},
 	})
 

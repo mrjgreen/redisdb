@@ -18,21 +18,13 @@ func seriesLog(action string, series string, start time.Time, end time.Time){
 	log.Debug(fmt.Sprintf("%s series: %s between %s and %s", action, series, start, end))
 }
 
-func checkBetweenRange(time_range SearchTimeRange) SearchTimeRange{
-
-	// TODO - check for nil end time and set it to now
-	// TODO - check for nil start time and set it to 1970
-
-	return time_range
-}
-
 func createPipeline(search SeriesSearch) []bson.M{
 
 	group := bson.M{
 		"_id": search.Group.Columns,
 	}
 
-	for k, v := range search.Group.Columns{
+	for k, v := range search.Values{
 		group[k] = v
 	}
 
@@ -40,8 +32,8 @@ func createPipeline(search SeriesSearch) []bson.M{
 		{
 			"$match" : bson.M{
 				"time": bson.M{
-					"$gt": between.Start,
-					"$lt": between.End,
+					"$gt": search.Between.Start,
+					"$lt": search.Between.End,
 				},
 			},
 		},
@@ -50,6 +42,8 @@ func createPipeline(search SeriesSearch) []bson.M{
 		},
 	}
 
+	fmt.Printf("%v", pipeline)
+
 	return pipeline
 }
 
@@ -57,20 +51,25 @@ func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Result
 
 	var results Results
 
-	between := checkBetweenRange(search.Between)
+	var err error
 
 	if(search.Group.Enabled){
 
 		pipeline := createPipeline(search)
 
-		self.Conn.C(series).Pipe(pipeline).All(&results)
+		err = self.Conn.C(series).Pipe(pipeline).All(&results)
 	}else{
-		self.Conn.C(series).Find(bson.M{
+
+		err = self.Conn.C(series).Find(bson.M{
 			"time": bson.M{
-				"$gt": between.Start,
-				"$lt": between.End,
+				"$gt": search.Between.Start,
+				"$lt": search.Between.End,
 			},
 		}).All(&results)
+	}
+
+	if err != nil{
+		panic(err)
 	}
 
 	return &results
@@ -86,10 +85,6 @@ func (self *MongoSeriesStore) Delete(series string, between SearchTimeRange){
 			"$lt": between.End,
 		},
 	})
-
-	// TODO - delete if emtpy
-
-	//seriesLog(fmt.Sprintf("Deleted %d items from", items), series, string(between.Start), string(between.End))
 }
 
 

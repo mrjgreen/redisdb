@@ -34,17 +34,12 @@ type SearchTimeRange struct {
 }
 
 type GroupColumn map[string]interface{}
+type SearchValue map[string]interface{}
 
 // A list of data columns to group by
 type SearchGroupBy struct {
 	Enabled bool
 	Columns GroupColumn
-}
-
-// A list of the result column criteria
-type SearchValue struct {
-	Type string
-	Column string
 }
 
 type SearchValues map[string]SearchValue
@@ -101,6 +96,14 @@ func NewSeriesData(values DataValue) *SeriesData{
 
 // Create a SearchTimeRange which will return all records older than (and including)
 // the given age in seconds with decimal fractions
+func NewRangeFull() SearchTimeRange{
+	return SearchTimeRange{
+		End : timeNow(),
+	}
+}
+
+// Create a SearchTimeRange which will return all records older than (and including)
+// the given age in seconds with decimal fractions
 func NewRangeBefore(age_seconds time.Duration) SearchTimeRange{
 	return SearchTimeRange{
 		End : timeNow().Add(-age_seconds),
@@ -112,6 +115,7 @@ func NewRangeBefore(age_seconds time.Duration) SearchTimeRange{
 func NewRangeAfter(age_seconds time.Duration) SearchTimeRange{
 	return SearchTimeRange{
 		Start : timeNow().Add(-age_seconds),
+		End : timeNow(),
 	}
 }
 
