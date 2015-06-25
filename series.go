@@ -33,10 +33,12 @@ type SearchTimeRange struct {
 	End time.Time
 }
 
+type GroupColumn map[string]interface{}
+
 // A list of data columns to group by
 type SearchGroupBy struct {
 	Enabled bool
-	Columns []string
+	Columns GroupColumn
 }
 
 // A list of the result column criteria

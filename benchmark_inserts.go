@@ -33,7 +33,7 @@ func (s *BenchMark) Start() error {
 				"count" : SearchValue{Type:"COUNT"},
 				"event" : SearchValue{Column : "event"},
 			},
-			Group : SearchGroupBy{Enabled: true, Columns : []string{"event"},},
+			Group : SearchGroupBy{Enabled: true,},
 		},
 	})
 
@@ -47,10 +47,7 @@ func (s *BenchMark) Start() error {
 				"avg_value" : SearchValue{Type:"AVG", Column: "value"},
 				"sum_value" : SearchValue{Type:"SUM", Column: "value"},
 			},
-			Group : SearchGroupBy{
-				Enabled: true,
-				Columns : []string{"event"},
-			},
+			Group : SearchGroupBy{Enabled: true, Columns : GroupColumn{"event" : "$event"},},
 		},
 	})
 

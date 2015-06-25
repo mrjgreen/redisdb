@@ -32,12 +32,39 @@ func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Result
 
 	between := checkBetweenRange(search.Between)
 
-	self.Conn.C(series).Find(bson.M{
-		"time": bson.M{
-			"$gt": between.Start,
-			"$lt": between.End,
-		},
-	}).All(&results)
+	if(search.Group.Enabled){
+
+		group := bson.M{
+			"_id": search.Group.Columns,
+		}
+
+		for k, v := range search.Group.Columns{
+			group[k] = v
+		}
+
+		pipeline := []bson.M{
+			{
+				"$match" : bson.M{
+					"time": bson.M{
+						"$gt": between.Start,
+						"$lt": between.End,
+					},
+				},
+			},
+			{
+				"$group" : group,
+			},
+		}
+
+		self.Conn.C(series).Pipe(pipeline).All(&results)
+	}else{
+		self.Conn.C(series).Find(bson.M{
+			"time": bson.M{
+				"$gt": between.Start,
+				"$lt": between.End,
+			},
+		}).All(&results)
+	}
 
 	return &results
 }
