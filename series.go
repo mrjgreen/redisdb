@@ -6,7 +6,7 @@ import (
 
 type SeriesStore interface {
 	Insert(series string, data DataValue) error
-	Delete(series string, data SearchTimeRange)
+	Delete(series string, data SearchTimeRange) (int, error)
 	Search(series string, data SeriesSearch) *Results
 	List(filter string) []Series
 	Drop(series string) error

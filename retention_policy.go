@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	"github.com/mrjgreen/redisdb/utils"
@@ -60,20 +61,26 @@ func (self *RetentionPolicyManager) List() []RetentionPolicy {
 	return policies
 }
 
-func (self *RetentionPolicyManager) Start() {
+func (self *RetentionPolicyManager) Start() error {
+
+	var duration, err = time.ParseDuration(self.CheckInterval)
+
+	if err != nil {
+		return err
+	}
 
 	if self.stop != nil {
-		return
+		return errors.New("Retention policy manager is already running")
 	}
 
 	self.stop = make(chan struct{})
 
-	var duration, _ = time.ParseDuration(self.CheckInterval)
+	self.Log.Infof("Started retention policy manager running every %s", duration)
 
 	for {
 		select {
 		case <-self.stop:
-			return
+			return nil
 		case <-time.After(duration):
 			self.Log.Infof("Checking retention policies after %s", self.CheckInterval)
 
@@ -82,8 +89,6 @@ func (self *RetentionPolicyManager) Start() {
 			for _, policy := range policies {
 				self.ApplyPolicy(policy)
 			}
-
-			time.Sleep(duration)
 		}
 	}
 }

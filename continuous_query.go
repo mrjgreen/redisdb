@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -126,20 +127,26 @@ func (self *ContinuousQueryManager) List() []ContinuousQuery {
 	return queries
 }
 
-func (self *ContinuousQueryManager) Start() {
+func (self *ContinuousQueryManager) Start() error {
+
+	var duration, err = time.ParseDuration(self.ComputeInterval)
+
+	if err != nil {
+		return err
+	}
 
 	if self.stop != nil {
-		return
+		return errors.New("Continuous query manager is already running")
 	}
 
 	self.stop = make(chan struct{})
 
-	var duration, _ = time.ParseDuration(self.ComputeInterval)
+	self.Log.Infof("Started continuous query manager running every %s", duration)
 
 	for {
 		select {
 		case <-self.stop:
-			return
+			return nil
 		case <-time.After(duration):
 			queries := self.List()
 
@@ -148,8 +155,6 @@ func (self *ContinuousQueryManager) Start() {
 			for _, query := range queries {
 				self.Apply(query)
 			}
-
-			time.Sleep(duration)
 		}
 	}
 }

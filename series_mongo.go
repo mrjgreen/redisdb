@@ -77,12 +77,17 @@ func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Result
 		err = self.Conn.C(series).Pipe(pipeline).All(&results)
 	} else {
 
+		// Remove the id from the results set
+		project := bson.M{
+			"_id": 0,
+		}
+
 		err = self.Conn.C(series).Find(bson.M{
 			"time": bson.M{
 				"$gte": search.Between.Start,
 				"$lte": search.Between.End,
 			},
-		}).All(&results)
+		}).Select(project).All(&results)
 	}
 
 	if err != nil {
@@ -92,16 +97,18 @@ func (self *MongoSeriesStore) Search(series string, search SeriesSearch) *Result
 	return &results
 }
 
-func (self *MongoSeriesStore) Delete(series string, between SearchTimeRange) {
+func (self *MongoSeriesStore) Delete(series string, between SearchTimeRange) (int, error) {
 
 	self.Log.Debugf("Deleting series: %s between %s and %s", series, between.Start, between.End)
 
-	self.Conn.C(series).RemoveAll(bson.M{
+	change, err := self.Conn.C(series).RemoveAll(bson.M{
 		"time": bson.M{
 			"$gte": between.Start,
 			"$lte": between.End,
 		},
 	})
+
+	return change.Removed, err
 }
 
 func (self *MongoSeriesStore) Insert(series string, data DataValue) error {
@@ -123,11 +130,7 @@ func (self *MongoSeriesStore) Insert(series string, data DataValue) error {
 
 	err := self.Conn.C(series).Insert(mdata)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return nil
+	return err
 }
 
 func (self *MongoSeriesStore) List(filter string) []Series {
@@ -146,15 +149,11 @@ func (self *MongoSeriesStore) List(filter string) []Series {
 	}
 
 	return results
-
-	return nil
 }
 
 func (self *MongoSeriesStore) Drop(series string) error {
 
 	self.Log.Infof("Deleting series: %s", series)
 
-	self.Conn.C(series).DropCollection()
-
-	return nil
+	return self.Conn.C(series).DropCollection()
 }

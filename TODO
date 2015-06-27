@@ -1,2 +1,0 @@
-Refactor datapoint to be private and initialised via constructor func
-Set ID on datapoint internally

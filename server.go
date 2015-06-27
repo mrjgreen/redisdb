@@ -12,10 +12,9 @@ type Server struct {
 	mgo                    *mgo.Session
 	Log                    utils.Logger
 	Store                  SeriesStore
-	Http                   *HttpInterface
+	HTTP                   *HTTPListener
 	RetentionPolicyManager *RetentionPolicyManager
 	ContinuousQueryManager *ContinuousQueryManager
-	BenchMark              *BenchMark
 }
 
 func NewMongo(c *Config) *mgo.Session {
@@ -61,27 +60,19 @@ func NewServer(c *Config) (*Server, error) {
 		Log:             log,
 	}
 
-	http := &HttpInterface{
+	http := &HTTPListener{
 		BindAddress: c.HTTP.Port,
 		Store:       store,
 		Log:         log,
-	}
-
-	test := &BenchMark{
-		Store: store,
-		Log:   log,
-		RetentionPolicyManager: retention,
-		ContinuousQueryManager: cq,
 	}
 
 	s := &Server{
 		mgo:   mgoSession,
 		Store: store,
 		Log:   log,
-		Http:  http,
+		HTTP:  http,
 		RetentionPolicyManager: retention,
 		ContinuousQueryManager: cq,
-		BenchMark:              test,
 	}
 
 	return s, nil
@@ -89,13 +80,11 @@ func NewServer(c *Config) (*Server, error) {
 
 func (s *Server) Start() error {
 
-	go s.Http.Start()
+	go s.HTTP.Start()
 	go s.RetentionPolicyManager.Start()
 	go s.ContinuousQueryManager.Start()
 
 	s.Log.Infof("Started server")
-
-	go s.BenchMark.Start()
 
 	return nil
 }
@@ -104,7 +93,7 @@ func (s *Server) Stop() error {
 
 	s.Log.Infof("Stopping server")
 
-	s.Http.Stop()
+	s.HTTP.Stop()
 	s.RetentionPolicyManager.Stop()
 	s.ContinuousQueryManager.Stop()
 
