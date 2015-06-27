@@ -1,20 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"net"
 	"net/http"
-	//"encoding/json"
+
 	"github.com/ant0ine/go-json-rest/rest"
-	log "gopkg.in/inconshreveable/log15.v2"
+	"github.com/mrjgreen/redisdb/utils"
 )
 
-type HttpInterface struct{
-	Store SeriesStore
-	Log log.Logger
+type HttpInterface struct {
+	Store       SeriesStore
+	Log         utils.Logger
 	BindAddress string
+	listener    net.Listener
 }
 
-func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
+func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request) {
 
 	series := r.PathParam("series")
 
@@ -28,24 +29,15 @@ func (self *HttpInterface) WriteCommand(w rest.ResponseWriter, r *rest.Request){
 	}
 
 	self.Store.Insert(series, data)
-
-	w.WriteJson(data)
 }
 
-func (self *HttpInterface) ReadCommand(w rest.ResponseWriter, r *rest.Request){
+func (self *HttpInterface) ReadCommand(w rest.ResponseWriter, r *rest.Request) {
 
 	series := r.PathParam("series")
 
 	search := SeriesSearch{
-		Between : NewRangeFull(),
+		Between: NewRangeFull(),
 	}
-//
-//	err := r.DecodeJsonPayload(&search)
-//
-//	if err != nil {
-//		rest.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
 
 	results := self.Store.Search(series, search)
 
@@ -62,22 +54,29 @@ func (self *HttpInterface) Start() error {
 	router, _ := rest.MakeRouter(
 		rest.Post("/write/:series", self.WriteCommand),
 		rest.Get("/read/:series", self.ReadCommand),
-//		rest.Get("/status", self.StatusCommand),
-//		rest.Put("/admin", self.AdminCommand),
 	)
 
 	api.SetApp(router)
 
-	self.Log.Info(fmt.Sprintf("Started HTTP interface on %s", self.BindAddress))
+	self.Log.Infof("Started HTTP interface on %s", self.BindAddress)
+
+	ln, err := net.Listen("tcp", self.BindAddress)
+	if err != nil {
+		return err
+	}
+	self.listener = ln
 
 	// Begin listening for requests in a separate goroutine.
-	http.ListenAndServe(self.BindAddress, api.MakeHandler())
+	http.Serve(self.listener, api.MakeHandler())
 
 	return nil
 }
 
 // Close closes the underlying listener.
-func (self *HttpInterface) Close() error {
+func (self *HttpInterface) Stop() {
+	self.Log.Debugf("Closing HTTP interface on %s", self.BindAddress)
 
-	return nil
+	self.listener.Close()
+
+	self.Log.Infof("Closed HTTP interface on %s", self.BindAddress)
 }

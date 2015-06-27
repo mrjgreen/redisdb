@@ -1,8 +1,7 @@
 package main
 
 import (
-	log "gopkg.in/inconshreveable/log15.v2"
-	redis "gopkg.in/redis.v3"
+	"github.com/mrjgreen/redisdb/utils"
 	"gopkg.in/mgo.v2"
 )
 
@@ -10,15 +9,16 @@ import (
 // It is built using a Config and it manages the startup and shutdown of all
 // services in the proper order.
 type Server struct {
-	Log log.Logger
-	Store SeriesStore
-	Http *HttpInterface
+	mgo                    *mgo.Session
+	Log                    utils.Logger
+	Store                  SeriesStore
+	Http                   *HttpInterface
 	RetentionPolicyManager *RetentionPolicyManager
 	ContinuousQueryManager *ContinuousQueryManager
-	BenchMark *BenchMark
+	BenchMark              *BenchMark
 }
 
-func NewMongo(c *Config) (*mgo.Session){
+func NewMongo(c *Config) *mgo.Session {
 	mgoSession, err := mgo.Dial(c.Mongo.Host)
 
 	if err != nil {
@@ -34,61 +34,54 @@ func NewMongo(c *Config) (*mgo.Session){
 // NewServer returns a new instance of Server built from a config.
 func NewServer(c *Config) (*Server, error) {
 
-	client := redis.NewClient(&redis.Options{
-		Addr:     c.Redis.Host,
-		Password: c.Redis.Auth,
-		DB:       c.Redis.Database,
-	})
-
 	mgoSession := NewMongo(c)
 
-	log, err := NewLogger(c.Log)
+	log, err := utils.NewLogger(c.Log.Level)
 
 	if err != nil {
 		return nil, err
 	}
 
 	store := &MongoSeriesStore{
-		Conn : mgoSession.DB("test"),
-		Log: log,
+		Conn: mgoSession.DB("data"),
+		Log:  log,
 	}
 
 	retention := &RetentionPolicyManager{
-		Conn : client,
-		Store : store,
-		Prefix : c.Redis.KeyPrefix,
-		CheckInterval : c.Retention.CheckInterval,
-		Log: log,
+		Conn:          mgoSession.DB("config"),
+		Store:         store,
+		CheckInterval: c.Retention.CheckInterval,
+		Log:           log,
 	}
 
 	cq := &ContinuousQueryManager{
-		Conn : client,
-		Store : store,
-		Prefix : c.Redis.KeyPrefix,
-		ComputeInterval : c.ContinuousQuery.ComputeInterval,
-		Log: log,
+		Conn:            mgoSession.DB("config"),
+		Store:           store,
+		ComputeInterval: c.ContinuousQuery.ComputeInterval,
+		Log:             log,
 	}
 
 	http := &HttpInterface{
-		BindAddress : c.HTTP.Port,
-		Store : store,
-		Log : log,
+		BindAddress: c.HTTP.Port,
+		Store:       store,
+		Log:         log,
 	}
 
 	test := &BenchMark{
-		Store : store,
-		Log: log,
+		Store: store,
+		Log:   log,
 		RetentionPolicyManager: retention,
 		ContinuousQueryManager: cq,
 	}
 
 	s := &Server{
-		Store : store,
-		Log : log,
-		Http : http,
-		RetentionPolicyManager : retention,
-		ContinuousQueryManager : cq,
-		BenchMark : test,
+		mgo:   mgoSession,
+		Store: store,
+		Log:   log,
+		Http:  http,
+		RetentionPolicyManager: retention,
+		ContinuousQueryManager: cq,
+		BenchMark:              test,
 	}
 
 	return s, nil
@@ -100,7 +93,7 @@ func (s *Server) Start() error {
 	go s.RetentionPolicyManager.Start()
 	go s.ContinuousQueryManager.Start()
 
-	s.Log.Info("Started server")
+	s.Log.Infof("Started server")
 
 	go s.BenchMark.Start()
 
@@ -109,7 +102,17 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop() error {
 
-	s.Log.Info("Stopped server")
+	s.Log.Infof("Stopping server")
 
-	return  nil
+	s.Http.Stop()
+	s.RetentionPolicyManager.Stop()
+	s.ContinuousQueryManager.Stop()
+
+	s.Log.Infof("All services stopped")
+
+	s.Log.Infof("Closing database connection")
+	s.mgo.Close()
+	s.Log.Infof("Database closed")
+
+	return nil
 }

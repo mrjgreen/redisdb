@@ -1,76 +1,84 @@
 package main
 
 import (
-	"time"
-	"fmt"
-	log "gopkg.in/inconshreveable/log15.v2"
-	redis "gopkg.in/redis.v3"
-	"encoding/json"
-	"./glob"
 	"strings"
+	"time"
+
+	"github.com/mrjgreen/redisdb/utils"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
-type ContinuousQueryManager struct{
-	Conn *redis.Client
-	Prefix string
-	Store SeriesStore
-	Log log.Logger
+type ContinuousQueryManager struct {
+	Conn            *mgo.Database
+	Store           SeriesStore
+	Log             utils.Logger
 	ComputeInterval string
+	stop            chan struct{}
 }
 
-type ContinuousQuery struct{
+type ContinuousQuery struct {
 	TargetSeries string
 	SourceSeries string
-	Granularity string
-	Query SeriesSearch
+	Granularity  string
+	Query        SeriesSearch
 }
 
 func (self *ContinuousQuery) GetInterval() (time.Duration, error) {
 
-	return time.ParseDuration(self.Granularity);
+	return time.ParseDuration(self.Granularity)
 }
 
-func (self *ContinuousQueryManager) Add(cq ContinuousQuery){
-	cqjson, _ := json.Marshal(cq)
+func (self *ContinuousQueryManager) Add(cq ContinuousQuery) {
+	self.Conn.C("continuous_query").Insert(cq)
 
-	self.Conn.HSet(self.Prefix + "config:continuous_query", cq.TargetSeries, string(cqjson))
+	// Index
+	index := mgo.Index{
+		Key:        []string{"targetseries"},
+		Unique:     true,
+		DropDups:   true,
+		Background: true,
+		Sparse:     true,
+	}
+
+	self.Conn.C("continuous_query").EnsureIndex(index)
 }
 
-func (self *ContinuousQueryManager) Delete(target_series string){
-	self.Conn.HDel(self.Prefix + "config:continuous_query", target_series)
+func (self *ContinuousQueryManager) Delete(target_series string) {
+	self.Conn.C("continuous_query").RemoveAll(bson.M{
+		"targetseries": target_series,
+	})
 }
 
-func (self *ContinuousQueryManager) Apply(query ContinuousQuery){
+func (self *ContinuousQueryManager) Apply(query ContinuousQuery) {
 
 	items := self.Store.List(query.SourceSeries)
 
-	self.Log.Info(fmt.Sprintf("Found %d series to apply continuous query %s", len(items), query.SourceSeries))
+	self.Log.Infof("Found %d series to apply continuous query %s", len(items), query.SourceSeries)
 
 	for _, series := range items {
 
-		self.applyToSeries(series.Name, query)
+		self.applyToSeries(series, query)
 	}
 }
 
-func replaceNameWithCapturedGlob(series, sourceName, targetName string) string{
+func replaceNameWithCapturedGlob(matches []string, targetName string) string {
 
-	matches := &glob.GlobMatches{}
-
-	glob.Glob(sourceName, series, matches)
-
-	for _, match := range matches.Matches {
+	for _, match := range matches {
 		targetName = strings.Replace(targetName, "*", match, 1)
 	}
 
 	return targetName
 }
 
-func (self *ContinuousQueryManager) applyToSeries(series string, query ContinuousQuery){
+func (self *ContinuousQueryManager) applyToSeries(seriesstr Series, query ContinuousQuery) {
 
-	targetSeries := replaceNameWithCapturedGlob(series, query.SourceSeries, query.TargetSeries)
+	series := seriesstr.Name
+
+	targetSeries := replaceNameWithCapturedGlob(seriesstr.Matches, query.TargetSeries)
 
 	// Calculate last two time periods based on granularity
-	self.Log.Info(fmt.Sprintf("Applying continuous query '%s' on series '%s' to series '%s' with granularity '%s'", query.TargetSeries, series, targetSeries, query.Granularity))
+	self.Log.Infof("Applying continuous query '%s' on series '%s' to series '%s' with granularity '%s'", query.TargetSeries, series, targetSeries, query.Granularity)
 
 	now := time.Now()
 
@@ -86,7 +94,7 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 			startTime = startTime.Add(-interval)
 		}
 
-		query.Query.Between.End = startTime.Add(interval).Add(- time.Nanosecond)
+		query.Query.Between.End = startTime.Add(interval).Add(-time.Nanosecond)
 		query.Query.Between.Start = startTime
 
 		// Perform search and group by
@@ -94,8 +102,8 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 
 		// Todo - apply in transaction
 		self.Store.Delete(targetSeries, SearchTimeRange{
-			Start : query.Query.Between.Start,
-			End : query.Query.Between.End,
+			Start: query.Query.Between.Start,
+			End:   query.Query.Between.End,
 		})
 
 		for _, point := range *results {
@@ -105,41 +113,55 @@ func (self *ContinuousQueryManager) applyToSeries(series string, query Continuou
 			self.Store.Insert(targetSeries, point)
 		}
 
-		self.Log.Info(fmt.Sprintf("Written %d rows for continuous query '%s'", len(*results), targetSeries))
+		self.Log.Infof("Written %d rows for continuous query '%s'", len(*results), targetSeries)
 	}
 }
 
 func (self *ContinuousQueryManager) List() []ContinuousQuery {
 
-	items := self.Conn.HGetAllMap(self.Prefix + "config:continuous_query")
+	var queries []ContinuousQuery
 
-	queries := make([]ContinuousQuery, 0)
-
-	for _, item := range items.Val(){
-
-		query := ContinuousQuery{}
-
-		json.Unmarshal([]byte(item), &query)
-
-		queries = append(queries, query)
-	}
+	self.Conn.C("continuous_query").Find(nil).All(&queries)
 
 	return queries
 }
 
-func (self *ContinuousQueryManager) Start(){
+func (self *ContinuousQueryManager) Start() {
 
-	var duration,_ = time.ParseDuration(self.ComputeInterval);
+	if self.stop != nil {
+		return
+	}
+
+	self.stop = make(chan struct{})
+
+	var duration, _ = time.ParseDuration(self.ComputeInterval)
 
 	for {
-		queries := self.List()
+		select {
+		case <-self.stop:
+			return
+		case <-time.After(duration):
+			queries := self.List()
 
-		self.Log.Info(fmt.Sprintf("Checking %d continuous queries after %s", len(queries), self.ComputeInterval))
+			self.Log.Infof("Checking %d continuous queries after %s", len(queries), self.ComputeInterval)
 
-		for _, query := range queries {
-			self.Apply(query)
+			for _, query := range queries {
+				self.Apply(query)
+			}
+
+			time.Sleep(duration)
 		}
-
-		time.Sleep(duration)
 	}
+}
+
+// Close closes the underlying listener.
+func (self *ContinuousQueryManager) Stop() {
+	if self.stop == nil {
+		return
+	}
+
+	close(self.stop)
+	self.stop = nil
+
+	self.Log.Infof("Stopped continuous query manager")
 }

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 )
 
@@ -22,17 +24,16 @@ func main() {
 	}
 }
 
-
 // Run determines and runs the command specified by the CLI args.
 func start(args ...string) error {
 
 	config := NewConfig()
 
-	if(len(args) > 0) {
+	if len(args) > 0 {
 
 		fmt.Printf("Loading configuration from file: %s\n", args[0])
 
-		if err := config.PopulateFromFile(args[0]); err != nil{
+		if err := config.PopulateFromFile(args[0]); err != nil {
 			return err
 		}
 	}
@@ -47,8 +48,11 @@ func start(args ...string) error {
 		return err
 	}
 
-	// Wait indefinitely.
-	<-(chan struct{})(nil)
+	defer s.Stop()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
+	<-ch
 
 	return nil
 }

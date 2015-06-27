@@ -2,46 +2,48 @@ package main
 
 import (
 	"time"
-	"fmt"
-	//"strconv"
-	log "gopkg.in/inconshreveable/log15.v2"
-	redis "gopkg.in/redis.v3"
+
+	"github.com/mrjgreen/redisdb/utils"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
-type RetentionPolicyManager struct{
-	Conn *redis.Client
-	Store SeriesStore
-	Prefix string
-	Log log.Logger
+type RetentionPolicyManager struct {
+	Conn          *mgo.Database
+	Store         SeriesStore
+	Log           utils.Logger
 	CheckInterval string
+	stop          chan struct{}
 }
 
 type RetentionPolicy struct {
-	Name string
+	Name        string
 	TimeSeconds time.Duration
 }
 
-func (self *RetentionPolicyManager) Add(policy RetentionPolicy){
+func (self *RetentionPolicyManager) Add(policy RetentionPolicy) {
 
-	self.Log.Info(fmt.Sprintf("Adding retention policy '%s' with retention %s seconds", policy.Name, policy.TimeSeconds))
+	self.Log.Infof("Adding retention policy '%s' with retention %s seconds", policy.Name, policy.TimeSeconds)
 
-	self.Conn.HSet(self.Prefix + "config:retention", policy.Name, string(policy.TimeSeconds))
+	self.Conn.C("retention_policies").Insert(policy)
 }
 
-func (self *RetentionPolicyManager) Delete(name string){
+func (self *RetentionPolicyManager) Delete(name string) {
 
-	self.Log.Info(fmt.Sprintf("Removing retention policy '%s'", name))
+	self.Log.Infof("Removing retention policy '%s'", name)
 
-	self.Conn.HDel(self.Prefix + "config:retention", name)
+	self.Conn.C("retention_policies").RemoveAll(bson.M{
+		"name": name,
+	})
 }
 
-func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
+func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy) {
 
 	items := self.Store.List(policy.Name)
 
 	for _, series := range items {
 
-		self.Log.Info(fmt.Sprintf("Applying retention policy '%s' to '%s'. Removing records older than %s", policy.Name, series.Name, policy.TimeSeconds))
+		self.Log.Infof("Applying retention policy '%s' to '%s'. Removing records older than %s", policy.Name, series.Name, policy.TimeSeconds)
 
 		search := NewRangeBefore(policy.TimeSeconds)
 
@@ -51,38 +53,49 @@ func (self *RetentionPolicyManager) ApplyPolicy(policy RetentionPolicy){
 
 func (self *RetentionPolicyManager) List() []RetentionPolicy {
 
-	items := self.Conn.HGetAllMap(self.Prefix + "config:retention")
+	var policies []RetentionPolicy
 
-	var policies = make([]RetentionPolicy, 0)
-
-	for name, t := range items.Val(){
-
-		timeflt,_ := time.ParseDuration(t)
-
-		policy := RetentionPolicy{
-			Name : name,
-			TimeSeconds : timeflt,
-		}
-
-		policies = append(policies, policy)
-	}
+	self.Conn.C("retention_policies").Find(nil).All(&policies)
 
 	return policies
 }
 
-func (self *RetentionPolicyManager) Start(){
+func (self *RetentionPolicyManager) Start() {
 
-	var duration,_ = time.ParseDuration(self.CheckInterval);
+	if self.stop != nil {
+		return
+	}
+
+	self.stop = make(chan struct{})
+
+	var duration, _ = time.ParseDuration(self.CheckInterval)
 
 	for {
-		self.Log.Info("Checking retention policies after " + self.CheckInterval)
+		select {
+		case <-self.stop:
+			return
+		case <-time.After(duration):
+			self.Log.Infof("Checking retention policies after %s", self.CheckInterval)
 
-		policies := self.List()
+			policies := self.List()
 
-		for _, policy := range policies{
-			self.ApplyPolicy(policy)
+			for _, policy := range policies {
+				self.ApplyPolicy(policy)
+			}
+
+			time.Sleep(duration)
 		}
-
-		time.Sleep(duration)
 	}
+}
+
+// Close closes the underlying listener.
+func (self *RetentionPolicyManager) Stop() {
+	if self.stop == nil {
+		return
+	}
+
+	close(self.stop)
+	self.stop = nil
+
+	self.Log.Infof("Stopped retention policy manager")
 }

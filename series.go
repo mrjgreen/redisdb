@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-type SeriesStore interface{
+type SeriesStore interface {
 	Insert(series string, data DataValue) error
 	Delete(series string, data SearchTimeRange)
 	Search(series string, data SeriesSearch) *Results
@@ -13,21 +13,11 @@ type SeriesStore interface{
 	//Info(series string) Series
 }
 
-
 // Data values are a string key representing the item name
 // along with a the value which should be scalar int or float, string
 // it is possible to store complex types, which can be serialized as JSON.
 // Aggregate functions like SUM/AVG will only work on numeric types
-type DataValue map[string]interface {}
-
-//// This type is passed into the storage interface when inserting data. The Time field
-//// should be a unix timestamp and may use decimals to represent fractions of seconds
-//type SeriesData struct{
-//	Values DataValue
-//	Time time.Time
-//}
-
-
+type DataValue map[string]interface{}
 
 ///////////////////////////
 //
@@ -40,7 +30,7 @@ type DataValue map[string]interface {}
 // The search is inclusive
 type SearchTimeRange struct {
 	Start time.Time
-	End time.Time
+	End   time.Time
 }
 
 type GroupColumn map[string]interface{}
@@ -54,14 +44,11 @@ type SearchGroupBy struct {
 
 type SearchValues map[string]SearchValue
 
-type SeriesSearch struct{
-	Values SearchValues
+type SeriesSearch struct {
+	Values  SearchValues
 	Between SearchTimeRange
-	Group SearchGroupBy
+	Group   SearchGroupBy
 }
-
-
-
 
 ///////////////////////////
 //
@@ -71,7 +58,6 @@ type SeriesSearch struct{
 
 type Results []DataValue
 
-
 ///////////////////////////
 //
 // General series stuff
@@ -79,6 +65,8 @@ type Results []DataValue
 ///////////////////////////
 type Series struct {
 	Name string
+	// If the series was searched using a glob pattern, the match components will be in this array
+	Matches []string
 }
 
 ///////////////////////////
@@ -97,25 +85,25 @@ type Series struct {
 
 // Create a SearchTimeRange which will return all records older than (and including)
 // the given age in seconds with decimal fractions
-func NewRangeFull() SearchTimeRange{
+func NewRangeFull() SearchTimeRange {
 	return SearchTimeRange{
-		End : time.Now(),
+		End: time.Now(),
 	}
 }
 
 // Create a SearchTimeRange which will return all records older than (and including)
 // the given age in seconds with decimal fractions
-func NewRangeBefore(age_seconds time.Duration) SearchTimeRange{
+func NewRangeBefore(age_seconds time.Duration) SearchTimeRange {
 	return SearchTimeRange{
-		End : time.Now().Add(-age_seconds),
+		End: time.Now().Add(-age_seconds),
 	}
 }
 
 // Create a SearchTimeRange which will return all records newer than (and including)
 // the given age in seconds with decimal fractions
-func NewRangeAfter(age_seconds time.Duration) SearchTimeRange{
+func NewRangeAfter(age_seconds time.Duration) SearchTimeRange {
 	return SearchTimeRange{
-		Start : time.Now().Add(-age_seconds),
-		End : time.Now(),
+		Start: time.Now().Add(-age_seconds),
+		End:   time.Now(),
 	}
 }
