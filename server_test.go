@@ -94,6 +94,13 @@ func TestServerStarts(t *testing.T) {
 	assert.Equal(t, data["foo"], returndata[0]["foo"], "Return data should match the posted data")
 	assert.Equal(t, data["baz"].(int), int(returndata[0]["baz"].(float64)), "Return int should match the posted data")
 
+	// List the series
+	returndata, err = sender.sendJsonRequest("/series", "GET", nil)
+
+	require.Len(t, returndata, 1)
+
+	assert.Equal(t, "test:series", returndata[0]["name"], "Series name should be test:series")
+
 	// Delete the data
 	sender.sendJsonRequest("/series/test:series/data", "DELETE", nil)
 
@@ -105,7 +112,6 @@ func TestServerStarts(t *testing.T) {
 	}
 
 	assert.Len(t, returndata, 0)
-
 }
 
 //

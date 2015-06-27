@@ -68,6 +68,13 @@ func (self *HTTPListener) ReadCommand(w rest.ResponseWriter, r *rest.Request) {
 	w.WriteJson(results)
 }
 
+func (self *HTTPListener) ListSeries(w rest.ResponseWriter, r *rest.Request) {
+
+	results := self.Store.List("")
+
+	w.WriteJson(results)
+}
+
 // Open starts the service
 func (self *HTTPListener) Start() error {
 
@@ -88,6 +95,9 @@ func (self *HTTPListener) Start() error {
 		rest.Post("/series/:series/data", self.WriteCommand),
 		rest.Get("/series/:series/data", self.ReadCommand),
 		rest.Delete("/series/:series/data", self.DeleteCommand),
+
+		rest.Get("/series", self.ListSeries),
+		//rest.Get("/series/:series", self.SeriesInfo),
 		rest.Delete("/series/:series", self.DropCommand),
 	)
 

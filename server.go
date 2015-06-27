@@ -46,15 +46,17 @@ func NewServer(c *Config) (*Server, error) {
 		Log:  log,
 	}
 
+	configDb := mgoSession.DB("config")
+
 	retention := &RetentionPolicyManager{
-		Conn:          mgoSession.DB("config"),
+		Conn:          configDb,
 		Store:         store,
 		CheckInterval: c.Retention.CheckInterval,
 		Log:           log,
 	}
 
 	cq := &ContinuousQueryManager{
-		Conn:            mgoSession.DB("config"),
+		Conn:            configDb,
 		Store:           store,
 		ComputeInterval: c.ContinuousQuery.ComputeInterval,
 		Log:             log,
