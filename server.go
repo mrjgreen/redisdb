@@ -65,7 +65,9 @@ func NewServer(c *Config) (*Server, error) {
 	http := &HTTPListener{
 		BindAddress: c.HTTP.Port,
 		Store:       store,
-		Log:         log,
+		RetentionPolicyManager: retention,
+		ContinuousQueryManager: cq,
+		Log: log,
 	}
 
 	s := &Server{

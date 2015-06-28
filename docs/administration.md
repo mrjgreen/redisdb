@@ -7,7 +7,7 @@ To list the status of the server send a "<status>" command with data in the foll
 
 #### List Streams
 
-To list all streams send an "<stream>" command with no data
+To list all streams send an "/stream" command with no data
 
 #### Drop a Stream
 

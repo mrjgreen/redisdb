@@ -9,15 +9,17 @@ import (
 )
 
 type HTTPListener struct {
-	Store       SeriesStore
-	Log         utils.Logger
-	BindAddress string
-	listener    net.Listener
+	Store                  SeriesStore
+	RetentionPolicyManager *RetentionPolicyManager
+	ContinuousQueryManager *ContinuousQueryManager
+	Log                    utils.Logger
+	BindAddress            string
+	listener               net.Listener
 }
 
-func (self *HTTPListener) WriteCommand(w rest.ResponseWriter, r *rest.Request) {
+type intResult map[string]int
 
-	series := r.PathParam("series")
+func (self *HTTPListener) WriteCommand(w rest.ResponseWriter, r *rest.Request) {
 
 	data := DataValue{}
 
@@ -28,42 +30,47 @@ func (self *HTTPListener) WriteCommand(w rest.ResponseWriter, r *rest.Request) {
 		return
 	}
 
-	self.Store.Insert(series, data)
+	err = self.Store.Insert(r.PathParam("series"), data)
+
+	if err != nil {
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	w.WriteJson(intResult{"inserted": 1})
 }
 
 func (self *HTTPListener) DropCommand(w rest.ResponseWriter, r *rest.Request) {
 
-	series := r.PathParam("series")
+	err := self.Store.Drop(r.PathParam("series"))
 
-	err := self.Store.Drop(series)
+	if err != nil {
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 
-	w.WriteJson(err)
+	w.WriteJson(intResult{"dropped": 1})
 }
 
 func (self *HTTPListener) DeleteCommand(w rest.ResponseWriter, r *rest.Request) {
 
-	series := r.PathParam("series")
-
 	between := NewRangeFull()
 
-	deleted, err := self.Store.Delete(series, between)
+	deleted, err := self.Store.Delete(r.PathParam("series"), between)
 
 	if err != nil {
-		w.WriteJson(err)
-	} else {
-		w.WriteJson(map[string]int{"deleted": deleted})
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	w.WriteJson(intResult{"deleted": deleted})
 }
 
 func (self *HTTPListener) ReadCommand(w rest.ResponseWriter, r *rest.Request) {
-
-	series := r.PathParam("series")
 
 	search := SeriesSearch{
 		Between: NewRangeFull(),
 	}
 
-	results := self.Store.Search(series, search)
+	results := self.Store.Search(r.PathParam("series"), search)
 
 	w.WriteJson(results)
 }
@@ -73,6 +80,36 @@ func (self *HTTPListener) ListSeries(w rest.ResponseWriter, r *rest.Request) {
 	results := self.Store.List(r.URL.Query().Get("filter"))
 
 	w.WriteJson(results)
+}
+
+func (self *HTTPListener) ListContinuousQueries(w rest.ResponseWriter, r *rest.Request) {
+
+	results := self.ContinuousQueryManager.List() //TODO - r.URL.Query().Get("filter")
+
+	w.WriteJson(results)
+}
+
+func (self *HTTPListener) DeleteContinuousQuery(w rest.ResponseWriter, r *rest.Request) {
+
+	self.ContinuousQueryManager.Delete(r.PathParam("query_name"))
+
+	w.WriteJson(intResult{"deleted": 1})
+}
+
+func (self *HTTPListener) AddContinuousQuery(w rest.ResponseWriter, r *rest.Request) {
+
+	data := ContinuousQuery{}
+
+	err := r.DecodeJsonPayload(&data)
+
+	if err != nil {
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	self.ContinuousQueryManager.Add(data)
+
+	w.WriteJson(intResult{"inserted": 1})
 }
 
 // Open starts the service
@@ -95,10 +132,13 @@ func (self *HTTPListener) Start() error {
 		rest.Post("/series/:series/data", self.WriteCommand),
 		rest.Get("/series/:series/data", self.ReadCommand),
 		rest.Delete("/series/:series/data", self.DeleteCommand),
-
 		rest.Get("/series", self.ListSeries),
-		//rest.Get("/series/:series", self.SeriesInfo),
 		rest.Delete("/series/:series", self.DropCommand),
+
+		rest.Get("/query", self.ListContinuousQueries),
+		rest.Post("/query", self.AddContinuousQuery),
+		//rest.Put("/query/:query_name", self.UpdateContinuousQuery),
+		rest.Delete("/query/:query_name", self.DeleteContinuousQuery),
 	)
 
 	api.SetApp(router)

@@ -50,11 +50,15 @@ func (self *RequestSender) sendJsonRequest(path string, method string, data m) (
 	return responseMap, err
 }
 
-func TestServerStarts(t *testing.T) {
+func getServer(t *testing.T) (*RequestSender, *Server) {
 
 	config := NewConfig()
 
 	s, err := NewServer(config)
+
+	// Clear everything
+	s.mgo.DB("data").DropDatabase()
+	s.mgo.DB("config").DropDatabase()
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -64,16 +68,23 @@ func TestServerStarts(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	data := m{"foo": "bar", "baz": 123}
-
 	sender := &RequestSender{"http://localhost" + config.HTTP.Port}
+
+	return sender, s
+}
+
+func TestServerStarts(t *testing.T) {
+
+	sender, _ := getServer(t)
+
+	data := m{"foo": "bar", "baz": 123}
 
 	// Drop the test series first
 	sender.sendJsonRequest("/series/test:series", "DELETE", nil)
 	sender.sendJsonRequest("/series/test:filter:series", "DELETE", nil)
 
 	// Post some data
-	_, err = sender.sendJsonRequest("/series/test:series/data", "POST", data)
+	_, err := sender.sendJsonRequest("/series/test:series/data", "POST", data)
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -128,78 +139,56 @@ func TestServerStarts(t *testing.T) {
 
 	assert.Len(t, returndata, 0)
 
-	s.Stop()
+	//s.Stop()
 }
 
-//
-// // Server represents a container for the metadata and storage data and services.
-// // It is built using a Config and it manages the startup and shutdown of all
-// // services in the proper order.
-// type BenchMark struct {
-// 	Log                    utils.Logger
-// 	Store                  SeriesStore
-// 	RetentionPolicyManager *RetentionPolicyManager
-// 	ContinuousQueryManager *ContinuousQueryManager
-// }
-//
-// // Start will intialize the tests
-// func (s *BenchMark) Start() error {
-//
-// 	s.Log.Infof("Running test inserts")
-//
-// 	s.RetentionPolicyManager.Delete("click:raw:c:*")
-//
-// 	s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", time.Duration(120 * time.Second)})
-//
-// 	s.ContinuousQueryManager.Delete("click:1m:c:*")
-//
-// 	s.ContinuousQueryManager.Add(ContinuousQuery{
-// 		SourceSeries: "click:raw:c:*",
-// 		TargetSeries: "click:1m:c:*", // The glob pattern of source will be mapped onto the target
-// 		Granularity:  "1m",
-// 		Query: SeriesSearch{
-// 			Values: SearchValues{
-// 				"count": SearchValue{"$sum": 1},
-// 			},
-// 			Group: SearchGroupBy{Enabled: true},
-// 		},
-// 	})
-//
-// 	s.ContinuousQueryManager.Delete("click:event:10m:c:*")
-//
-// 	s.ContinuousQueryManager.Add(ContinuousQuery{
-// 		SourceSeries: "click:raw:c:*",
-// 		TargetSeries: "click:event:10m:c:*", // The glob pattern of source will be mapped onto the target
-// 		Granularity:  "10m",
-// 		Query: SeriesSearch{
-// 			Values: SearchValues{
-// 				"count":     SearchValue{"$sum": 1},
-// 				"avg_value": SearchValue{"$avg": "$value"},
-// 				"sum_value": SearchValue{"$sum": "$value"},
-// 			},
-// 			Group: SearchGroupBy{
-// 				Enabled: true,
-// 				Columns: GroupColumn{"event": "$event"},
-// 			},
-// 		},
-// 	})
-//
-// 	// var i = 0
-//
-// 	// for {
-//
-// 	// 	i++
-// 	// 	campaignTag := "12345"
-//
-// 	// 	point := DataValue{
-// 	// 		"value": i,
-// 	// 		"event": i % 5,
-// 	// 	}
-//
-// 	// 	s.Store.Insert("click:raw:c:"+campaignTag, point)
-//
-// 	// 	time.Sleep(100 * time.Nanosecond)
-// 	// }
-//
-// 	return nil
-// }
+func TestContinuousQueries(t *testing.T) {
+
+	sender, _ := getServer(t)
+
+	sender.sendJsonRequest("/query/click:event:10m:c:*", "DELETE", nil)
+
+	data := m{
+		"SourceSeries": "click:raw:c:*",
+		"TargetSeries": "click:event:10m:c:*", // The glob pattern of source will be mapped onto the target
+		"Granularity":  "10m",
+		"Query": m{
+			"Values": m{
+				"count":     m{"$sum": 1},
+				"avg_value": m{"$avg": "$value"},
+				"sum_value": m{"$sum": "$value"},
+			},
+			"Group": m{
+				"Enabled": true,
+				"Columns": m{"event": "$event"},
+			},
+		},
+	}
+
+	sender.sendJsonRequest("/query", "POST", data)
+
+	returndata, err := sender.sendJsonRequest("/query", "GET", nil)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	assert.Len(t, returndata, 1)
+
+	sender.sendJsonRequest("/query/click:event:10m:c:*", "DELETE", nil)
+
+	returndata, err = sender.sendJsonRequest("/query", "GET", nil)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	assert.Len(t, returndata, 0)
+
+	// s.RetentionPolicyManager.Delete("click:raw:c:*")
+	//
+	// s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", time.Duration(120 * time.Second)})
+
+	//s.Stop()
+
+}
