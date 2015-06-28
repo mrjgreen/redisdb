@@ -141,10 +141,18 @@ func (self *MongoSeriesStore) List(filter string) []Series {
 
 	for _, z := range val {
 
-		var matches glob.GlobMatches
+		// Mongo reserved collections
+		if z[0:7] == "system." || z[0:6] == "local." {
+			continue
+		}
 
-		if filter != "" && glob.Glob(filter, z, &matches) {
-			results = append(results, Series{Name: z, Matches: matches.Matches})
+		if filter == "" {
+			results = append(results, Series{Name: z})
+		} else {
+			var matches glob.GlobMatches
+			if glob.Glob(filter, z, &matches) {
+				results = append(results, Series{Name: z, Matches: matches.Matches})
+			}
 		}
 	}
 

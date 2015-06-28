@@ -70,7 +70,7 @@ func (self *HTTPListener) ReadCommand(w rest.ResponseWriter, r *rest.Request) {
 
 func (self *HTTPListener) ListSeries(w rest.ResponseWriter, r *rest.Request) {
 
-	results := self.Store.List("")
+	results := self.Store.List(r.URL.Query().Get("filter"))
 
 	w.WriteJson(results)
 }

@@ -64,9 +64,9 @@ type Results []DataValue
 //
 ///////////////////////////
 type Series struct {
-	Name string
+	Name string `json:"name"`
 	// If the series was searched using a glob pattern, the match components will be in this array
-	Matches []string
+	Matches []string `json:"matches"`
 }
 
 ///////////////////////////

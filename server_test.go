@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -21,7 +20,7 @@ type RequestSender struct {
 func (self *RequestSender) sendJsonRequest(path string, method string, data m) ([]m, error) {
 
 	url := self.Host + path
-	fmt.Println("Sending test request:>", url)
+	//fmt.Println("Sending test request:>", url)
 
 	var req *http.Request
 
@@ -42,7 +41,7 @@ func (self *RequestSender) sendJsonRequest(path string, method string, data m) (
 
 	body, _ := ioutil.ReadAll(resp.Body)
 
-	fmt.Println("Received: " + string(body))
+	//fmt.Println("Received: " + string(body))
 
 	var responseMap []m
 
@@ -71,6 +70,7 @@ func TestServerStarts(t *testing.T) {
 
 	// Drop the test series first
 	sender.sendJsonRequest("/series/test:series", "DELETE", nil)
+	sender.sendJsonRequest("/series/test:filter:series", "DELETE", nil)
 
 	// Post some data
 	_, err = sender.sendJsonRequest("/series/test:series/data", "POST", data)
@@ -101,6 +101,21 @@ func TestServerStarts(t *testing.T) {
 
 	assert.Equal(t, "test:series", returndata[0]["name"], "Series name should be test:series")
 
+	// Post some data under a different name so we can test the filter list
+	_, err = sender.sendJsonRequest("/series/test:filter:series/data", "POST", data)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	// List the series
+	returndata, err = sender.sendJsonRequest("/series?filter=test:filter:*", "GET", nil)
+
+	require.Len(t, returndata, 1)
+
+	assert.Equal(t, "test:filter:series", returndata[0]["name"], "Series name should be test:series")
+	assert.Equal(t, []interface{}{"series"}, returndata[0]["matches"], "Glob pattern should have matched on series name")
+
 	// Delete the data
 	sender.sendJsonRequest("/series/test:series/data", "DELETE", nil)
 
@@ -112,6 +127,8 @@ func TestServerStarts(t *testing.T) {
 	}
 
 	assert.Len(t, returndata, 0)
+
+	s.Stop()
 }
 
 //
