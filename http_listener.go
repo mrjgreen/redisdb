@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"net/http"
+	"net/url"
 
 	"github.com/ant0ine/go-json-rest/rest"
 	"github.com/mrjgreen/redisdb/utils"
@@ -54,7 +55,9 @@ func (self *HTTPListener) DeleteCommand(w rest.ResponseWriter, r *rest.Request) 
 
 	between := NewRangeFull()
 
-	deleted, err := self.Store.Delete(r.PathParam("series"), between)
+	series, _ := url.QueryUnescape(r.PathParam("series"))
+
+	deleted, err := self.Store.Delete(series, between)
 
 	if err != nil {
 		rest.Error(w, err.Error(), http.StatusInternalServerError)
@@ -70,7 +73,9 @@ func (self *HTTPListener) ReadCommand(w rest.ResponseWriter, r *rest.Request) {
 		Between: NewRangeFull(),
 	}
 
-	results := self.Store.Search(r.PathParam("series"), search)
+	series, _ := url.QueryUnescape(r.PathParam("series"))
+
+	results := self.Store.Search(series, search)
 
 	w.WriteJson(results)
 }
@@ -91,7 +96,9 @@ func (self *HTTPListener) ListContinuousQueries(w rest.ResponseWriter, r *rest.R
 
 func (self *HTTPListener) DeleteContinuousQuery(w rest.ResponseWriter, r *rest.Request) {
 
-	self.ContinuousQueryManager.Delete(r.PathParam("query_name"))
+	param, _ := url.QueryUnescape(r.PathParam("name"))
+
+	self.ContinuousQueryManager.Delete(param)
 
 	w.WriteJson(intResult{"deleted": 1})
 }
@@ -108,6 +115,38 @@ func (self *HTTPListener) AddContinuousQuery(w rest.ResponseWriter, r *rest.Requ
 	}
 
 	self.ContinuousQueryManager.Add(data)
+
+	w.WriteJson(intResult{"inserted": 1})
+}
+
+func (self *HTTPListener) ListRetentionPolicies(w rest.ResponseWriter, r *rest.Request) {
+
+	results := self.RetentionPolicyManager.List() //TODO - r.URL.Query().Get("filter")
+
+	w.WriteJson(results)
+}
+
+func (self *HTTPListener) DeleteRetentionPolicy(w rest.ResponseWriter, r *rest.Request) {
+
+	param, _ := url.QueryUnescape(r.PathParam("name"))
+
+	self.RetentionPolicyManager.Delete(param)
+
+	w.WriteJson(intResult{"deleted": 1})
+}
+
+func (self *HTTPListener) AddRetentionPolicy(w rest.ResponseWriter, r *rest.Request) {
+
+	data := RetentionPolicy{}
+
+	err := r.DecodeJsonPayload(&data)
+
+	if err != nil {
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	self.RetentionPolicyManager.Add(data)
 
 	w.WriteJson(intResult{"inserted": 1})
 }
@@ -137,8 +176,13 @@ func (self *HTTPListener) Start() error {
 
 		rest.Get("/query", self.ListContinuousQueries),
 		rest.Post("/query", self.AddContinuousQuery),
-		//rest.Put("/query/:query_name", self.UpdateContinuousQuery),
-		rest.Delete("/query/:query_name", self.DeleteContinuousQuery),
+		//rest.Put("/query/:name", self.UpdateContinuousQuery), // TODO - atomic replacement (update)
+		rest.Delete("/query/:name", self.DeleteContinuousQuery),
+
+		rest.Get("/retention", self.ListRetentionPolicies),
+		rest.Post("/retention", self.AddRetentionPolicy),
+		//rest.Put("/retention/:name", self.UpdateRetentionPolicy), // TODO - atomic replacement (update)
+		rest.Delete("/retention/:name", self.DeleteRetentionPolicy),
 	)
 
 	api.SetApp(router)

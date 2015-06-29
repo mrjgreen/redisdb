@@ -184,11 +184,34 @@ func TestContinuousQueries(t *testing.T) {
 	}
 
 	assert.Len(t, returndata, 0)
+}
 
-	// s.RetentionPolicyManager.Delete("click:raw:c:*")
-	//
-	// s.RetentionPolicyManager.Add(RetentionPolicy{"click:raw:c:*", time.Duration(120 * time.Second)})
+func TestRetentionPolicy(t *testing.T) {
 
-	//s.Stop()
+	sender, _ := getServer(t)
 
+	sender.sendJsonRequest("/retention/click:event:10m:c:*", "DELETE", nil)
+
+	data := m{
+		"name": "click:raw:c:*",
+		"time": "10m",
+	}
+
+	sender.sendJsonRequest("/retention", "POST", data)
+
+	returndata, err := sender.sendJsonRequest("/retention", "GET", nil)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	assert.Len(t, returndata, 1)
+
+	sender.sendJsonRequest("/retention/click:event:10m:c:*", "DELETE", nil)
+
+	returndata, err = sender.sendJsonRequest("/retention", "GET", nil)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 }

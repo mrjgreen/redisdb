@@ -18,8 +18,8 @@ type RetentionPolicyManager struct {
 }
 
 type RetentionPolicy struct {
-	Name        string
-	TimeSeconds time.Duration
+	Name        string        `json:"name"`
+	TimeSeconds time.Duration `json:"time"`
 }
 
 func (self *RetentionPolicyManager) Add(policy RetentionPolicy) {

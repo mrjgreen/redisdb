@@ -46,6 +46,9 @@ func (self *ContinuousQueryManager) Add(cq ContinuousQuery) {
 }
 
 func (self *ContinuousQueryManager) Delete(target_series string) {
+
+	self.Log.Infof("Removing continuous query '%s'", target_series)
+
 	self.Conn.C("continuous_query").RemoveAll(bson.M{
 		"targetseries": target_series,
 	})
